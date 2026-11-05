@@ -158,7 +158,7 @@ def test_ipv6_live_public_egress_is_flagged():
     raw.__enter__.return_value = raw
     tls = MagicMock()
     tls.__enter__.return_value = tls
-    tls.recv.side_effect = [b'HTTP/1.1 200 OK\\r\\n\\r\\nip=2606:4700::1111\\nloc=US\\n', b'']
+    tls.recv.side_effect = [b'HTTP/1.1 200 OK\r\n\r\nip=2606:4700::1111\nloc=US\n', b'']
     context = MagicMock()
     context.wrap_socket.return_value = tls
     with patch('network.socket.getaddrinfo', return_value=answer), \
