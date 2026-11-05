@@ -13,7 +13,7 @@ function render(s){
  $('hero').className='panel hero '+(s.ready?'pass':s.report?'fail':'');
  $('reason').textContent=s.error||(!s.report?'只读检查，不修改现有网络配置。':s.ready?'可以启动后复核实际连接；断线阻断与登录验收仍以专项证据为准。':'未通过项目：'+failed.map(x=>x.label+'（'+labels[x.state]+'）').join('、'));
  $('checks').replaceChildren();for(const item of s.required||[]){const node=document.createElement('div');node.className='check';node.textContent=item.label;node.append(badge(item.state));$('checks').append(node)}
- $('preflight').replaceChildren();for(const [key,title] of [['client','客户端安装'],['claude','经本地代理访问 Claude'],['system','经系统路径访问 Claude'],['guard','客户端规则与优先级']]){const item=c[key];row($('preflight'),title,item?[item.value,item.detail].filter(Boolean).join(' · '):'等待检测',item?.state||'unknown')}
+ $('preflight').replaceChildren();for(const [key,title] of [['client','客户端安装'],['claude','经本地代理访问 Claude'],['system','经系统路径访问 Claude'],['guard','客户端规则与优先级'],['ipv6','系统 IPv6 出口实测']]){const item=c[key];row($('preflight'),title,item?[item.value,item.detail].filter(Boolean).join(' · '):'等待检测',item?.state||'unknown')}
  $('evidence').replaceChildren();const evidence=s.report?.client_evidence;if(evidence?.length){for(const item of evidence)row($('evidence'),item.label,item.detail,item.state)}else row($('evidence'),'实时配置','尚未取得客户端规则证据','unknown');
  $('time').textContent=s.report?'本次检测完成于 '+new Date(s.report.finished*1000).toLocaleTimeString()+' · 启动结果有效期 60 秒':'';
  if(pending&&!s.busy&&s.report){pending=false;if(s.ready)launch();}
