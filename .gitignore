@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+pytest-cache-files-*/
+reports/
+settings.json
+install-receipt.json
