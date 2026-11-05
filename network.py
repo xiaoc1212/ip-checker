@@ -2,6 +2,8 @@ import concurrent.futures
 import ipaddress
 import json
 import os
+import socket
+import ssl
 from pathlib import Path
 import subprocess
 import sys
@@ -170,6 +172,50 @@ def trace_probe(expected, port, system=False, generic=False):
         return result('unknown', '未确认', detail + '；' + scope, error=str(exc)[:350])
 
 
+def ipv6_probe():
+    """Read-only IPv6 egress observation. A failed probe NEVER proves no leak."""
+    host = 'www.cloudflare.com'
+    try:
+        # Restrict DNS answers to AAAA and connect to the numeric IPv6 address.
+        # This avoids accidentally testing IPv4 or inheriting HTTP proxy settings.
+        answers = socket.getaddrinfo(host, 443, socket.AF_INET6, socket.SOCK_STREAM)
+    except OSError as exc:
+        return result('unknown', 'IPv6 未确认', '无法取得 IPv6 解析结果；不能据此判断无泄露',
+                      error=type(exc).__name__)
+    if not answers:
+        return result('unknown', 'IPv6 未确认', '没有可用 AAAA 记录；不能据此判断无泄露')
+    last_error = 'IPv6 连接未完成'
+    for answer in answers[:2]:
+        try:
+            with socket.create_connection((answer[4][0], 443), timeout=5) as raw:
+                with ssl.create_default_context().wrap_socket(raw, server_hostname=host) as tls:
+                    tls.settimeout(5)
+                    tls.sendall(('GET /cdn-cgi/trace HTTP/1.1\r\nHost: ' + host +
+                                 '\r\nConnection: close\r\nAccept-Encoding: identity\r\n\r\n').encode('ascii'))
+                    response = bytearray()
+                    while len(response) < 32768:
+                        part = tls.recv(min(4096, 32768 - len(response)))
+                        if not part:
+                            break
+                        response.extend(part)
+            head, separator, body = response.partition(b'\r\n\r\n')
+            status = head.split(b'\r\n', 1)[0].split()
+            if not separator or len(status) < 2 or status[1] != b'200':
+                raise ValueError('未取得 HTTP 200 trace')
+            ip, country = parse_trace(body.decode('utf-8', errors='replace'))
+            address = ipaddress.ip_address(ip)
+            if address.version != 6 or not address.is_global:
+                raise ValueError('trace 未确认公网 IPv6 出口')
+            return result('fail', ip,
+                          f'{country} · 检测工具可通过系统 IPv6 路径访问公网；与预期 IPv4 不同。'
+                          '这不是 Claude 进程泄露的证明，需核对实际连接。',
+                          ip=ip, country=country)
+        except Exception as exc:
+            last_error = type(exc).__name__
+    return result('unknown', 'IPv6 未确认',
+                  '强制 IPv6 请求未取得有效出口（' + last_error + '）；不能证明客户端无 IPv6 泄露')
+
+
 def geo_probe(ip, port):
     # The geography endpoint is independent of its risk-score endpoint. Some risk
     # responses describe another address in the same /24, so do not use that score.
@@ -267,7 +313,8 @@ def run_checks(expected, emit=lambda key, value: None):
         add('guard', result('unknown', '实时配置未确认', str(exc)))
     jobs = {'claude': lambda: trace_probe(expected, port),
             'general': lambda: trace_probe(expected, port, generic=True),
-            'native': native_claude}
+            'native': native_claude,
+            'ipv6': ipv6_probe}
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         futures = {pool.submit(fn): name for name, fn in jobs.items()}
         for future in concurrent.futures.as_completed(futures):
@@ -282,6 +329,12 @@ def run_checks(expected, emit=lambda key, value: None):
                                     value['label'] if value else '安装后点击重新检测；旧的网页应用不计作原生客户端。'))
             else:
                 add(name, value)
+    ipv6 = report['checks'].get('ipv6', result('unknown', 'IPv6 未确认'))
+    for evidence in report.get('client_evidence', []):
+        if evidence['label'] == 'IPv6 旁路':
+            evidence['state'] = ipv6['state']
+            evidence['detail'] = ipv6['value'] + ' · ' + ipv6['detail']
+
     # Avoid simultaneous trace requests to Claude through two paths. The ISP
     # chain can stall one of the concurrent handshakes while sequential probes work.
     add('system', trace_probe(expected, port, system=True))
@@ -291,7 +344,7 @@ def run_checks(expected, emit=lambda key, value: None):
     report['system_proxy'] = system_proxy()
     report['limitations'] = ['这是检测工具的请求结果；客户端连接以实时观察记录为准。',
                              'DNS / WebRTC 泄露未实测，不能据此显示无泄露。',
-                             'IPv6 为代理运行设置核对，不等同于整台电脑无 IPv6 泄露。',
+                             'IPv6 增加了检测工具的强制 IPv6 出口实测；失败或超时不能证明客户端无泄露。',
                              '代理退出后的系统级断网保护未部署。']
     return report
 
