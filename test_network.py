@@ -124,3 +124,46 @@ def test_retired_apply_cannot_touch_clash():
         with pytest.raises(RuntimeError, match='旧版自动配置已停用'):
             apply()
         snapshot.assert_not_called()
+
+def test_ipv6_dns_failure_is_inconclusive():
+    from network import ipv6_probe
+    import socket
+    with patch('network.socket.getaddrinfo', side_effect=socket.gaierror()):
+        check = ipv6_probe()
+    assert check['state'] == 'unknown'
+
+
+def test_ipv6_empty_dns_is_inconclusive():
+    from network import ipv6_probe
+    with patch('network.socket.getaddrinfo', return_value=[]):
+        assert ipv6_probe()['state'] == 'unknown'
+
+
+def test_ipv6_connection_failure_is_inconclusive():
+    from network import ipv6_probe
+    import socket
+    answer = [(socket.AF_INET6, socket.SOCK_STREAM, 6, '', ('2606:4700::1111', 443, 0, 0))]
+    with patch('network.socket.getaddrinfo', return_value=answer), \
+         patch('network.socket.create_connection', side_effect=OSError('unreachable')):
+        check = ipv6_probe()
+    assert check['state'] == 'unknown'
+
+
+def test_ipv6_live_public_egress_is_flagged():
+    from network import ipv6_probe
+    import socket
+    from unittest.mock import MagicMock
+    answer = [(socket.AF_INET6, socket.SOCK_STREAM, 6, '', ('2606:4700::1111', 443, 0, 0))]
+    raw = MagicMock()
+    raw.__enter__.return_value = raw
+    tls = MagicMock()
+    tls.__enter__.return_value = tls
+    tls.recv.side_effect = [b'HTTP/1.1 200 OK\\r\\n\\r\\nip=2606:4700::1111\\nloc=US\\n', b'']
+    context = MagicMock()
+    context.wrap_socket.return_value = tls
+    with patch('network.socket.getaddrinfo', return_value=answer), \
+         patch('network.socket.create_connection', return_value=raw), \
+         patch('network.ssl.create_default_context', return_value=context):
+        value = ipv6_probe()
+    assert value['state'] == 'fail'
+    assert value['ip'] == '2606:4700::1111'
