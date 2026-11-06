@@ -2,6 +2,29 @@
  'use strict';
  const W=window.Workbench,$=id=>document.getElementById(id),state={tab:'library',apps:[],imports:[],selected:new Set(),scanning:false,workflow:null,order:[],backup:null,lastWake:null,lastJob:null};
  const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
+ // Public website bookmarks, deliberately separate from purchased subscriptions.
+ // Only retain entry URLs that passed the local DIRECT HTTP probe on 2026-11-06.
+ // Entry reachability is separate from paid-node usability; no speed guarantees.
+ const resources=[
+  {id:'wgetcloud',name:'WgetCloud',category:'大陆加速候选 / Clash',mark:'W',color:'#60A5FA',url:'https://wgetcloud.org/',description:'已换为本机直连探测通过的 .org 入口。官网说明支持 Clash；付费节点连接与晚高峰表现需先试用。',source:'本机直连入口通过',directChecked:true},
+  {id:'doggygo',name:'狗狗加速',category:'你的在用服务 / Clash',mark:'狗',color:'#FBBF24',url:'https://userpanel.dginv.click/',description:'你当前使用的订阅。用户面板入口直连探测通过；登录跳转、套餐和各节点可用性需实际确认。',source:'本机直连入口通过',directChecked:true,subscriptionId:'vpn',openLabel:'打开用户面板 ↗'},
+ ];
+ const tools=[{id:'seagm',name:'SEAGM 礼品卡',category:'礼品卡 / 账户管理',mark:'S',color:'#FB923C',url:'https://member.seagm.com/',description:'你的礼品卡购买与账户入口。购买前核对卡片地区、币种和适用服务。',source:'你的常用网站',openLabel:'打开会员中心',extra:{label:'礼品卡商城',url:'https://www.seagm.com/'}}];
+ function resourceLink(label,url,cls){const a=node('a',label,cls);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
+ function renderResources(hostId,sites,canRegister){
+  const host=$(hostId);host.replaceChildren();
+  for(const site of sites){
+   const card=node('article',undefined,'wb-resource-card');card.dataset.siteId=site.id;
+   const header=node('header'),mark=node('span',site.mark,'wb-resource-mark');mark.style.setProperty('--site-accent',site.color);mark.setAttribute('aria-hidden','true');
+   const title=node('div',undefined,'wb-resource-title');title.append(node('h3',site.name),node('span',site.category,'wb-resource-category'));header.append(mark,title);
+   const source=node('span',site.source,'wb-resource-source'+(site.directChecked?' direct-checked':''));if(site.directChecked)source.title='2026-11-06 本机 DIRECT 通道 HTTP 探测通过；未使用所选代理节点。仅代表公开入口响应，未验证付费节点或全部登录跳转。';
+   const actions=node('div',undefined,'wb-resource-actions');actions.append(resourceLink(site.openLabel||'打开网站 ↗',site.url,'wb-secondary wb-resource-open'));
+   if(site.extra)actions.append(resourceLink(site.extra.label,site.extra.url,'wb-text-button'));
+   if(canRegister){const register=node('button',site.subscriptionId?'管理订阅':'登记订阅','wb-text-button');register.type='button';register.setAttribute('aria-label',(site.subscriptionId?'管理 ':'登记 ')+site.name+' 订阅');register.onclick=()=>{const existing=site.subscriptionId&&W.state.subscriptions.find(sub=>sub.id===site.subscriptionId);if(existing){W.editSubscription(existing);return;}W.editSubscription();$('subName').value=site.name;$('subPurpose').value=site.category;$('subOfficial').value=site.url;$('subRenew').value=site.url;$('subAdmin').value=site.url;};actions.append(register);}
+   card.append(header,node('p',site.description,'wb-resource-description'),node('span',new URL(site.url).hostname,'wb-resource-domain'),source,actions);host.append(card);
+  }
+ }
+ renderResources('vpnDirectory',resources,true);renderResources('subscriptionTools',tools,false);
  document.querySelectorAll('#workflowDialog [data-close],#settingsDialog [data-close],#libraryPanel [data-close],#importPanel [data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
  function tab(name){state.tab=name;for(const [key,id] of [['library','libraryPanel'],['import','importPanel'],['manual','itemForm']])$(id).hidden=key!==name;$('pinControls').hidden=name==='manual';document.querySelectorAll('[data-add-tab]').forEach(b=>{b.setAttribute('aria-selected',String(b.dataset.addTab===name));b.classList.toggle('active',b.dataset.addTab===name);});if(name==='library'&&!state.apps.length)scan();renderCandidates();}
  document.querySelectorAll('[data-add-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.addTab));
@@ -33,8 +56,8 @@
  $('workflowForm').onsubmit=async e=>{e.preventDefault();try{await W.request('workflows/save',{id:state.workflow?.id||'scene-'+crypto.randomUUID(),name:$('workflowName').value.trim(),item_ids:state.order,require_proxy:$('workflowProxy').checked});await loadFlows();$('workflowEditor').open=false;W.toast('场景已保存');}catch(error){$('workflowError').textContent=error.message;}};
  setInterval(()=>{if($('workflowDialog').open||!$('cancelWorkflow').hidden)loadFlows().catch(()=>{});},1500);
 
- async function desktopStatus(){try{const data=await W.request('desktop/status');$('desktopInfo').textContent=(data.tray?'托盘已启用，关闭窗口后可从托盘重新打开。':'托盘未启用。')+' '+(data.hotkey?'按 Alt + Q 唤醒，并定位搜索框。':data.message||'热键暂不可用。');if(data.wake_count>0&&(state.lastWake===null||data.wake_count!==state.lastWake)){if(!$('itemEditor').open&&!$('subscriptionEditor').open){document.querySelectorAll('dialog[open]').forEach(d=>d.close());$('launcherSearch').focus();}}state.lastWake=data.wake_count;}catch{}}
- $('settingsButton').onclick=()=>{W.showDialog('settingsDialog');desktopStatus();};$('wakeWorkbench').onclick=()=>W.request('desktop/wake',{}).catch(e=>W.toast(e.message));
+ async function desktopStatus(){try{const data=await W.request('desktop/status');$('desktopInfo').textContent=(data.tray?'托盘已启用，关闭窗口后可从托盘重新打开。':'托盘未启用。')+' '+(data.hotkey?'按 Alt + Q 唤醒，并定位搜索框。':data.message||'热键暂不可用。');if(state.lastWake!==null&&data.wake_count>state.lastWake){if(!$('itemEditor').open&&!$('subscriptionEditor').open){document.querySelectorAll('dialog[open]').forEach(d=>d.close());W.switchView('launcherView');$('launcherSearch').focus();}}state.lastWake=data.wake_count;}catch{}}
+ $('wakeWorkbench').onclick=()=>W.request('desktop/wake',{}).catch(e=>W.toast(e.message));
  desktopStatus();setInterval(desktopStatus,1200);
  $('exportBackup').onclick=async()=>{try{const response=await fetch('./api/backup/export');if(!response.ok){const data=await response.json();throw Error(data.error);}const blob=await response.blob(),url=URL.createObjectURL(blob),link=node('a');link.href=url;link.download='工作台备份-'+new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Shanghai'})+'.zip';link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);$('backupMessage').textContent='备份已生成，请保留下载的 ZIP 文件。';}catch(error){$('backupMessage').textContent=error.message;}};
  $('selectBackup').onclick=()=>$('backupFile').click();$('backupFile').onchange=async()=>{const file=$('backupFile').files[0];$('backupFile').value='';if(!file)return;if(file.size>20*1024*1024){$('backupMessage').textContent='备份不能超过 20MB';return;}try{state.backup=await W.request('backup/preview',{data:await base64(file)});$('backupSummary').textContent='此备份包含 '+state.backup.items+' 个项目、'+state.backup.subscriptions+' 条订阅、'+state.backup.workflows+' 个场景和 '+state.backup.icons+' 个图标。确认后替换当前配置，并保留恢复前备份。';$('backupPreview').hidden=false;$('backupMessage').textContent='';}catch(error){$('backupPreview').hidden=true;$('backupMessage').textContent=error.message;}};

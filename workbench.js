@@ -2,6 +2,8 @@
 (() => {
   'use strict';
   const byId = id => document.getElementById(id);
+  byId('settingsDialog').append(byId('settingsContent').content.cloneNode(true));
+  byId('settingsContent').remove();
   const el = (tag, cls, text) => { const result=document.createElement(tag);if(cls)result.className=cls;if(text!==undefined)result.textContent=text;return result; };
   const state={items:[],groups:[],subscriptions:[],group:'all',editing:null,editingSub:null,missing:null,drag:null,opening:new Set(),mutation:false,refreshing:false};
   const collator=new Intl.Collator('zh-CN-u-co-pinyin');
@@ -22,34 +24,63 @@
     const response=await fetch('./api/'+route,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const result=await response.json();if(!response.ok){const error=Error(result.error||'操作未完成，请重试');error.data=result;throw error;}return result;
   }
-  function showDialog(id){const dialog=byId(id);if(!dialog.open)dialog.showModal();}
+  function switchView(id){
+    document.querySelectorAll('.wb-view').forEach(view=>view.hidden=view.id!==id);
+    document.querySelectorAll('[data-view]').forEach(tab=>{tab.setAttribute('aria-selected',String(tab.dataset.view===id));tab.tabIndex=tab.dataset.view===id?0:-1;});
+    hideMenu();
+  }
+  document.querySelectorAll('[data-view]').forEach(tab=>{tab.onclick=()=>switchView(tab.dataset.view);tab.onkeydown=event=>{const tabs=[...document.querySelectorAll('[data-view]')];let index=tabs.indexOf(tab);if(event.key==='ArrowRight')index=(index+1)%tabs.length;else if(event.key==='ArrowLeft')index=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')index=0;else if(event.key==='End')index=tabs.length-1;else return;event.preventDefault();tabs[index].click();tabs[index].focus();};});
+  function showDialog(id){if(['claudeDrawer','subscriptionDrawer','settingsDialog'].includes(id)){switchView(id==='settingsDialog'?'subscriptionDrawer':id);return;}const dialog=byId(id);if(!dialog.open)dialog.showModal();}
   function showClaude(highlight=false){showDialog('claudeDrawer');if(highlight){byId('check').classList.add('wb-highlight-check');byId('check').focus();setTimeout(()=>byId('check').classList.remove('wb-highlight-check'),2500);}}
+  document.querySelector('.wb-brand').onclick=event=>{event.preventDefault();switchView('launcherView');};
   function hideMenu(){byId('itemMenu').hidePopover();}
   document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>byId(button.dataset.close).close());
-  for(const id of ['claudeDrawer','subscriptionDrawer','itemEditor','subscriptionEditor','missingTarget']){
+  for(const id of ['itemEditor','subscriptionEditor','missingTarget']){
     const dialog=byId(id);dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();});
   }
-  byId('openClaude').onclick=()=>showClaude();byId('networkSummary').onclick=()=>showClaude();
-  byId('expandClaude').onclick=()=>{const expanded=byId('claudeDrawer').classList.toggle('full-width');byId('expandClaude').textContent=expanded?'还原抽屉':'展开为全宽';byId('expandClaude').setAttribute('aria-pressed',String(expanded));};
+  byId('openClaude').onclick=()=>showClaude();byId('claudeIndicator').onclick=()=>showClaude();
+  byId('clashIndicator').onclick=byId('exitIndicator').onclick=()=>switchView('subscriptionDrawer');
   byId('subscriptionSummary').onclick=byId('manageSubscriptions').onclick=()=>showDialog('subscriptionDrawer');
-  document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!document.querySelector('dialog[open]')){event.preventDefault();byId('launcherSearch').focus();}});
+  document.addEventListener('keydown',event=>{if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!document.querySelector('dialog[open]')){event.preventDefault();switchView('launcherView');byId('launcherSearch').focus();}});
 
   const typeNames={web:'网页',exe:'客户端',uwp:'客户端',folder:'目录',claude_protected:'检测启动'};
   function symbol(name){const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.classList.add('icon');svg.setAttribute('aria-hidden','true');const use=document.createElementNS(svg.namespaceURI,'use');use.setAttribute('href','#i-'+name);svg.append(use);return svg;}
+  // Static, local SVG artwork. Never interpolate configuration values into markup.
+  let iconSequence=0;
+  function brandIcon(id){
+    const swirl=Array.from({length:6},(_,i)=>'<path transform="rotate('+i*60+' 20 20)" d="M20 11c-9-6-17 6-10 12l10 6 7-4V15l-7-4-7 4v10"/>').join('');
+    const art={
+      gemini:'<defs><linearGradient id="gemini-gradient" x2="1" y2="1"><stop stop-color="#64B5FF"/><stop offset=".6" stop-color="#7C6CFA"/><stop offset="1" stop-color="#C084FC"/></linearGradient></defs><path fill="url(#gemini-gradient)" d="M20 2c2 12 6 16 18 18-12 2-16 6-18 18C18 26 14 22 2 20 14 18 18 14 20 2Z"/>',
+      'ai-studio':'<rect x="3" y="5" width="34" height="30" rx="6" fill="#103B69" stroke="#38BDF8" stroke-width="2"/><path d="M4 13h32M9 9h2m3 0h2m-3 9-5 5 5 5m14-10 5 5-5 5m-5-11-4 13" stroke="#55CDFF" stroke-width="2.5" fill="none"/>',
+      'google-flow':'<path d="M6 24C-1 8 14 0 26 9c7 5 13 2 12-2 6 17-7 21-17 14C10 14 4 18 6 24Z" fill="#2DD4BF"/><path d="M34 16c7 16-8 24-20 15C7 26 1 29 2 33c-6-17 7-21 17-14 11 7 17 3 15-3Z" fill="#0D9488"/>',
+      'antigravity-desktop':'<path fill="#A78BFA" d="m20 2 18 32H2Zm0 12L9 30h22Z" fill-rule="evenodd"/><path d="m20 8 7 13H13Z" fill="#FB923C"/><path d="M10 35h20" stroke="#FB923C" stroke-width="3"/>',
+      'chatgpt-web':'<g fill="none" stroke="#10B981" stroke-width="1.8" stroke-linejoin="round">'+swirl+'</g>',
+      'claude-web':'<g stroke="#E7A276" stroke-width="2.4" stroke-linecap="square">'+Array.from({length:12},(_,i)=>'<path transform="rotate('+i*30+' 20 20)" d="M20 4v10"/>').join('')+'</g><circle cx="20" cy="20" r="5" fill="#D98B5F"/>',
+      'qq-mail':'<rect x="3" y="10" width="34" height="25" rx="5" fill="#FBBF24"/><path d="m4 12 16 13 16-13" stroke="#142D50" stroke-width="3" fill="none"/><ellipse cx="20" cy="12" rx="7" ry="9" fill="#183453"/><ellipse cx="20" cy="14" rx="5" ry="5" fill="#F3F4F6"/><path d="m17 11 3-2 3 2-3 2Z" fill="#FB923C"/>',
+      gmail:'<path d="M4 10v23h7V16l9 7 9-7v17h7V10" fill="#F3F4F6"/><path d="M4 33V10l7 5v18" fill="#4285F4"/><path d="M29 15v18h7V10" fill="#34A853"/><path d="m4 8 16 12L36 8v8L20 28 4 16Z" fill="#EA4335"/><path d="m29 13 7-5v8l-7 5" fill="#FBBC04"/>',
+      'clash-desktop':'<path d="M5 17 4 5l11 7q5-2 10 0L36 5l-1 12c7 19-37 24-30 0Z" fill="#60A5FA"/><path d="m8 11 6 4-6 2m24-6-6 4 6 2" fill="#1E3A5F"/><path d="m12 22 4 1m8 0 4-1m-11 6 3 2 3-2" stroke="#102342" stroke-width="2.5" stroke-linecap="round" fill="none"/>',
+      'clash-github':'<path fill="#F3F4F6" d="M20 3a17 17 0 0 0-5.4 33.1c.9.2 1.2-.4 1.2-.8v-3.2c-5 .9-6-2.1-6-2.1-.8-2-2-2.5-2-2.5-1.7-1.2.1-1.2.1-1.2 1.8.1 2.7 1.8 2.7 1.8 1.6 2.7 4.2 1.9 5.2 1.4.2-1.2.6-1.9 1.1-2.4-4-.4-8.2-2-8.2-9 0-2 .7-3.6 1.8-4.8-.2-.5-.8-2.4.2-4.8 0 0 1.5-.5 5 1.8a17 17 0 0 1 9 0c3.5-2.3 5-1.8 5-1.8 1 2.4.4 4.3.2 4.8 1.1 1.2 1.8 2.8 1.8 4.8 0 7-4.2 8.6-8.2 9 .7.6 1.3 1.7 1.3 3.4v4.8c0 .4.3 1 1.2.8A17 17 0 0 0 20 3Z"/>',
+      'static-ip-admin':'<g fill="#18314D" stroke="#7DD3FC" stroke-width="1.7"><rect x="5" y="4" width="30" height="9" rx="2"/><rect x="5" y="16" width="30" height="9" rx="2"/><rect x="5" y="28" width="30" height="9" rx="2"/></g><path d="M10 8h3m-3 12h3m-3 12h3" stroke="#10B981" stroke-width="3"/><path d="M21 8h9m-9 12h9m-9 12h9" stroke="#7DD3FC" stroke-width="2"/>',
+      'vpn-web':'<path d="m20 3 15 5v12c0 9-15 17-15 17S5 29 5 20V8Z" fill="#123A34" stroke="#2DD4BF" stroke-width="2"/><rect x="13" y="18" width="14" height="11" rx="2" fill="#2DD4BF"/><path d="M16 18v-4a4 4 0 0 1 8 0v4" fill="none" stroke="#B7F7E5" stroke-width="2"/><circle cx="20" cy="23" r="1.5" fill="#123A34"/>',
+      steam:'<circle cx="20" cy="20" r="18" fill="#193A59"/><path d="m3 25 10 4 12-11" stroke="#D7E9F6" stroke-width="5"/><circle cx="27" cy="14" r="8" fill="#193A59" stroke="#D7E9F6" stroke-width="3"/><circle cx="13" cy="29" r="5" fill="#193A59" stroke="#D7E9F6" stroke-width="2"/>',
+      yy:'<path d="M3 14 9 3l11 6 11-6 6 11-4 20-13 4-13-4Z" fill="#FACC15"/><path d="m10 15 7 8v8m13-16-7 8v8" stroke="#503A11" stroke-width="4" stroke-linecap="round" fill="none"/>'
+    };
+    if(id==='antigravity-web')id='antigravity-desktop';if(id==='chatgpt-desktop')id='chatgpt-web';if(id==='claude-desktop')id='claude-web';
+    if(!art[id])return null;const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 40 40');svg.setAttribute('aria-hidden','true');svg.innerHTML=art[id];const gradient=svg.querySelector('linearGradient');if(gradient){const unique='brand-gradient-'+(++iconSequence);gradient.id=unique;svg.querySelector('path[fill^="url"]').setAttribute('fill','url(#'+unique+')');}return svg;
+  }
   function appIcon(item){
     const icon=el('span','wb-app-icon '+item.group+(item.launch_type==='claude_protected'||item.id==='claude-web'?' claude':''));icon.setAttribute('aria-hidden','true');
-    const glyph={gemini:'✦','ai-studio':'✧','google-flow':'F','antigravity-desktop':'A','antigravity-web':'A','chatgpt-web':'◎','chatgpt-desktop':'◎','claude-desktop':'✳','claude-web':'✳',steam:'S',yy:'YY','clash-desktop':'◈','clash-github':'⌘'};
-    if(glyph[item.id])icon.textContent=glyph[item.id];else icon.append(symbol(item.group==='mail'?'mail':item.launch_type==='folder'?'folder':item.group==='network'?'shield':item.launch_type==='web'?'external':'app'));
-    if(/^static\/icons\/[a-f0-9]{64}\.png$/.test(item.icon)){
+    const brand=brandIcon(item.id);icon.append(brand||symbol(item.group==='mail'?'mail':item.launch_type==='folder'?'folder':item.group==='network'?'shield':item.launch_type==='web'?'external':'app'));
+    if(!brand&&/^static\/icons\/[a-f0-9]{64}\.png$/.test(item.icon)){
       const fallback=[...icon.childNodes];const img=document.createElement('img');img.alt='';img.loading='lazy';img.src='./api/icons/'+item.icon.split('/').pop();img.onerror=()=>icon.replaceChildren(...fallback);icon.replaceChildren(img);
     }
     return icon;
   }
   function tile(item,zone){
     const card=el('div','wb-tile');card.dataset.id=item.id;card.draggable=zone!=='recent';
-    const button=el('button','wb-tile-launch');button.type='button';button.setAttribute('aria-label','打开 '+item.name);button.title=item.name;button.disabled=state.opening.has(item.id);button.append(appIcon(item),el('span','wb-tile-name',item.name));button.onclick=()=>openItem(item);
+    const button=el('button','wb-tile-launch');button.type='button';button.setAttribute('aria-label','打开 '+item.name);button.title=item.name;button.disabled=state.opening.has(item.id);const label=el('span','wb-tile-label');label.append(el('span','wb-tile-name',item.name));if(item.target_config?.profile)label.append(el('span','wb-tile-profile',item.target_config.profile));button.append(appIcon(item),label);button.onclick=()=>openItem(item);
     const more=el('button','wb-tile-more','⋯');more.type='button';more.setAttribute('aria-label',item.name+' 更多操作');more.onclick=event=>openMenu(item,event);
-    card.append(button,el('span','wb-tile-kind',typeNames[item.launch_type]),more);card.oncontextmenu=event=>{event.preventDefault();openMenu(item,event);};
+    card.append(button,el('span','wb-tile-kind '+item.launch_type,typeNames[item.launch_type]),more);card.oncontextmenu=event=>{event.preventDefault();openMenu(item,event);};
     card.ondragstart=event=>{state.drag={id:item.id,zone};event.dataTransfer.setData('text/plain',item.id);event.dataTransfer.effectAllowed='move';card.classList.add('dragging');};
     card.ondragend=()=>{state.drag=null;document.querySelectorAll('.dragging,.drag-over').forEach(x=>x.classList.remove('dragging','drag-over'));};
     card.ondragover=event=>{const source=state.items.find(x=>x.id===state.drag?.id);if(source&&(source.group===item.group||zone==='pinned'&&state.drag.zone==='pinned')){event.preventDefault();card.classList.add('drag-over');event.dataTransfer.dropEffect='move';}};
@@ -60,11 +91,8 @@
   function fillRow(id,items,empty,zone){const host=byId(id);host.replaceChildren();items.forEach(item=>host.append(tile(item,zone)));if(!items.length)host.append(el('p','wb-empty',empty));}
   function renderItems(){
     const visible=state.items.filter(matches);const filtered=visible.filter(item=>state.group==='all'||item.group===state.group||state.group==='pinned'&&item.pinned);
-    byId('itemCount').textContent=byId('launcherSearch').value?filtered.length+' 个匹配项目':state.items.length+' 个快捷入口';
     fillRow('pinnedItems',visible.filter(x=>x.pinned),'在项目菜单中选择“置顶”，常用工具就会出现在这里。','pinned');
     fillRow('recentItems',visible.filter(x=>x.last_used>0).sort((a,b)=>b.last_used-a.last_used).slice(0,5),'打开过的项目会出现在这里。','recent');
-    const filters=byId('groupFilters');filters.replaceChildren();
-    for(const group of [{id:'all',name:'全部项目'},...state.groups]){const b=el('button','wb-filter'+(state.group===group.id?' active':''),group.name);b.setAttribute('aria-pressed',String(state.group===group.id));b.onclick=()=>{state.group=group.id;renderItems();};filters.append(b);}
     const host=byId('launcherGroups');host.replaceChildren();
     const groups=state.group==='pinned'?[{id:'pinned',name:'常用置顶'}]:state.groups.filter(g=>g.id!=='pinned'&&(state.group==='all'||g.id===state.group));
     let shown=0;
@@ -74,7 +102,7 @@
     byId('searchEmpty').hidden=!(byId('launcherSearch').value&&!shown);
   }
   async function loadItems(){const data=await request('launcher/items');state.items=data.items;state.groups=data.groups;byId('launcherError').hidden=true;renderItems();}
-  async function reloadItems(){try{await loadItems();}catch(error){byId('launcherError').hidden=false;byId('launcherError').querySelector('span').textContent=error.message;byId('itemCount').textContent='入口暂不可用';}}
+  async function reloadItems(){try{await loadItems();}catch(error){byId('launcherError').hidden=false;byId('launcherError').querySelector('span').textContent=error.message;}}
   byId('launcherSearch').oninput=renderItems;byId('retryLauncher').onclick=reloadItems;
   async function openItem(item){
     if(state.opening.has(item.id))return;state.opening.add(item.id);renderItems();
@@ -118,12 +146,13 @@
   function expiryLabel(sub){if(sub.remaining_days===null)return '待填写';if(sub.remaining_days<0)return '已过期 '+Math.abs(sub.remaining_days)+' 天';if(sub.remaining_days===0)return '今天到期';return '剩余 '+sub.remaining_days+' 天';}
   function expiryBadge(sub,prefix=''){return el('span','wb-expiry '+sub.expiry_status,prefix+expiryLabel(sub));}
   function renderSubscriptions(){
-    const summary=byId('subscriptionSummary');summary.replaceChildren();const primary=state.subscriptions.filter(s=>['static-ip','vpn'].includes(s.id));for(const sub of primary)summary.append(expiryBadge(sub,(sub.id==='static-ip'?'静态 IP':'VPN')+'：'));if(!primary.length)summary.textContent='订阅与到期 · 点击管理';
+    const summary=byId('subscriptionSummary');const primary=state.subscriptions.find(s=>s.id==='static-ip');summary.replaceChildren(el('span','wb-expiry '+(primary?.expiry_status||'unfilled'),'⏳ IP：'+(primary?.remaining_days===null||!primary?'待配置':primary.remaining_days>0?primary.remaining_days+'天':primary.remaining_days===0?'今日到期':'已过期')));summary.title=state.subscriptions.map(s=>s.name+'：'+expiryLabel(s)).join('\n');
     const host=byId('subscriptionCards');host.replaceChildren();
-    for(const sub of state.subscriptions){const card=el('article','wb-sub-card');const header=el('header');const title=el('div');title.append(el('h3','',sub.name),el('p','wb-sub-purpose',sub.purpose||'用途待填写'));const edit=el('button','','编辑');edit.onclick=()=>editSubscription(sub);header.append(title,edit);card.append(header,expiryBadge(sub),el('p','wb-sub-date',sub.expire_date?'到期日 '+sub.expire_date:'尚未设置到期日期'));
-      const links=el('div','wb-sub-links');for(const [field,label] of [['renew_url','购买 / 续费 ↗'],['admin_url','账户后台 ↗'],['official_url','官网 ↗']]){const b=el('button','',label);b.disabled=!sub[field];b.title=sub[field]?'打开已保存的入口':'编辑订阅后填写入口';b.onclick=async()=>{try{await request('subscriptions/open',{id:sub.id,link:field});}catch(error){toast(error.message);}};links.append(b);}card.append(links);
+    for(const sub of state.subscriptions){const card=el('article','wb-sub-card');const header=el('header');const title=el('div');title.append(el('h3','',sub.name),el('p','wb-sub-purpose',sub.purpose||'用途待填写'));const edit=el('button','wb-secondary wb-sub-edit','✎ 编辑配置');edit.onclick=()=>editSubscription(sub);header.append(title,edit);card.append(header);
+      const meter=el('div','wb-sub-meter '+sub.expiry_status);const status=sub.remaining_days===null?'日期未配置':sub.remaining_days<0?'已过期 '+Math.abs(sub.remaining_days)+' 天':sub.remaining_days===0?'今天到期':'剩余 '+sub.remaining_days+' 天';meter.append(el('strong','wb-sub-status',status));if(sub.remaining_days!==null){const progress=el('progress');progress.max=100;progress.value=Math.max(0,Math.min(100,sub.remaining_days/30*100));progress.setAttribute('aria-label','未来 30 天内剩余时间');progress.title='以未来 30 天为刻度';meter.append(progress);}card.append(meter);if(sub.expire_date)card.append(el('p','wb-sub-date','到期日 '+sub.expire_date));
+      const links=el('div','wb-sub-links');for(const [field,label] of [['renew_url','打开续费网站'],['admin_url','账户管理后台'],['ip_info','复制 IP 与端口'],['official_url','打开官网']]){const b=el('button','',label);b.disabled=!sub[field];b.title=sub[field]?(field==='ip_info'?'复制已保存的 IP 与端口':'打开已保存的入口'):'编辑配置后填写信息';b.onclick=async()=>{try{if(field==='ip_info'){await navigator.clipboard.writeText(sub.ip_info);toast('已复制');}else await request('subscriptions/open',{id:sub.id,link:field});}catch(error){toast(error.message||'复制未完成，请选中文字手动复制');}};links.append(b);}
       if(sub.ip_info)card.append(el('p','wb-sub-notes',sub.ip_info));if(sub.notes)card.append(el('p','wb-sub-notes',sub.notes));
-      const copies=el('div','wb-sub-copies');for(const [field,label] of [['ip_info','复制 IP / 端口'],['notes','复制备注']]){const b=el('button','',label);b.disabled=!sub[field];b.onclick=async()=>{try{await navigator.clipboard.writeText(sub[field]);toast('已复制');}catch{toast('复制未完成，请选中文字手动复制');}};copies.append(b);}card.append(copies);
+      card.append(links);
       const meta=el('div','wb-sub-meta');meta.append(el('span','',sub.update_source));const remove=el('button','','移除订阅');remove.onclick=async()=>{if(!confirm('移除这条订阅记录？不会取消服务商套餐。'))return;try{await request('subscriptions/delete',{id:sub.id});await loadSubscriptions();}catch(error){toast(error.message);}};meta.append(remove);card.append(meta);host.append(card);
     }
     if(!state.subscriptions.length)host.append(el('p','wb-empty','还没有订阅记录。点击下方按钮添加。'));
@@ -137,12 +166,12 @@
   setInterval(()=>{const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Shanghai'});if(day!==subscriptionDay){subscriptionDay=day;loadSubscriptions().catch(()=>{});}},60000);
 
   function indicator(id,text,status){const target=byId(id);target.textContent=text;target.className='wb-indicator '+status;}
-  function renderExit(data){let label='待查询';if(data.checked)label=data.region?(new Intl.DisplayNames(['zh-CN'],{type:'region'}).of(data.region)||data.region):'待确认';indicator('exitIndicator','出口：'+label,'');byId('exitIndicator').title=data.detail+(data.checked?' · '+new Date(data.checked*1000).toLocaleString():'');}
-  async function localStatus(){try{const data=await request('status');indicator('clashIndicator','Clash：'+({running:'运行中',stopped:'未运行',unknown:'待确认'}[data.clash]||'待确认'),data.clash==='running'?'good':data.clash==='stopped'?'bad':'');indicator('proxyIndicator','代理：'+(data.proxy==='connected'?'连通':'断开'),data.proxy==='connected'?'good':'bad');renderExit(data.exit);}catch{indicator('clashIndicator','Clash：待确认','');indicator('proxyIndicator','代理：待确认','');}}
+  function renderExit(data){let label='待查询';if(data.checked)label=data.region?(new Intl.DisplayNames(['zh-CN'],{type:'region'}).of(data.region)||data.region):'待确认';indicator('exitIndicator','出口：'+label,data.checked&&data.region?'good':'warn');byId('exitIndicator').title=data.detail+(data.checked?' · '+new Date(data.checked*1000).toLocaleString():'');}
+  async function localStatus(){try{const data=await request('status');indicator('clashIndicator','Clash：'+({running:'运行中',stopped:'未运行',unknown:'待确认'}[data.clash]||'待确认'),data.clash==='running'?'good':data.clash==='stopped'?'bad':'');byId('clashIndicator').title='Clash 进程与代理端口独立检测；代理端口：'+(data.proxy==='connected'?'连通':'断开');renderExit(data.exit);}catch{indicator('clashIndicator','Clash：待确认','');byId('clashIndicator').title='本地网络状态暂不可用';}}
   async function refreshNetwork(){if(state.refreshing)return;state.refreshing=true;byId('refreshNetwork').disabled=true;try{await localStatus();renderExit(await request('status/refresh-exit',{}));}catch(error){toast(error.message);}finally{state.refreshing=false;byId('refreshNetwork').disabled=false;}}
   byId('refreshNetwork').onclick=refreshNetwork;
   window.addEventListener('claude-state',event=>{const s=event.detail;const [label,status]=s.offline?['服务离线','warn']:s.sampling?['采样中','warn']:s.busy?['检测中','warn']:s.changed?['需重检','warn']:s.failed?['需处理','bad']:s.expired?['已过期','warn']:s.ready?['可手动启动','good']:s.report||s.error?['待核验','warn']:['待检测',''];indicator('claudeIndicator','Claude：'+label,status);});
-  window.Workbench={request,state,toast,showDialog,showClaude,loadItems,loadSubscriptions,editItem,appIcon,searchKeys};
+  window.Workbench={request,state,toast,showDialog,showClaude,switchView,loadItems,loadSubscriptions,editItem,editSubscription,appIcon,searchKeys};
   reloadItems();loadSubscriptions().catch(error=>{byId('subscriptionSummary').textContent='订阅：暂不可用';byId('subscriptionCards').replaceChildren(el('p','wb-empty',error.message));});refreshNetwork();
   setInterval(localStatus,10000);
 })();
