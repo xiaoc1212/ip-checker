@@ -94,6 +94,7 @@ function renderSteps(s){
     if(state==='pass')passed++;if(state==='fail')hasFail=true;if(state==='unknown')hasUnknown=true;
     $('step-'+definition.id).className='step '+state;
     $('desc-'+definition.id).textContent=view.summary;
+    $('step-'+definition.id).title=definition.title+'：'+view.summary+(view.detail?'\n'+view.detail:'');
     const symbol=$('symbol-'+definition.id);symbol.replaceChildren();
     if(state==='running')symbol.append(node('span','spinner'));
     else if(state==='pending')symbol.textContent=String(stepDefinitions.indexOf(definition)+1).padStart(2,'0');
