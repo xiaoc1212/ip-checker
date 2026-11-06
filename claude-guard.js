@@ -8,10 +8,11 @@ main = function(config, profileName) {
   const target = groups.find(g => g.name === group);
   if (!target || !Array.isArray(target.proxies) || target.proxies.length !== 1 ||
       ["DIRECT", "REJECT"].includes(target.proxies[0])) {
-    throw new Error("IP 检测工具：固定出口组必须存在且只有一个代理出口");
+    // Never break subscription generation if its groups change. The launcher
+    // will refuse to start until a supported fixed group is restored.
+    return config;
   }
-  config["find-process-mode"] = "always";
-  // Legacy rule generator only. Never change global TUN or DNS settings.
+  // Preserve process mode, DNS, TUN, proxies and all other global settings.
   const processes = "PROCESS-NAME-REGEX,(?i)^claude(?:-code)?\\.exe$";
   const path = "PROCESS-PATH-REGEX,(?i)[\\\\/](?:AnthropicClaude|Claude)(?:_[^\\\\/]+)?[\\\\/]";
   const domains = ["claude.ai", "claude.com", "anthropic.com", "claudeusercontent.com",

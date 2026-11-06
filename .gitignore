@@ -4,3 +4,11 @@ pytest-cache-files-*/
 reports/
 settings.json
 install-receipt.json
+launcher-data.json
+launcher-data.json.*.tmp
+workflows.json
+workflows.json.*.tmp
+static/icons/
+.playwright-cli/
+.workbuddy/
+output/playwright/

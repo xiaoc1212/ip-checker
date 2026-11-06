@@ -75,7 +75,7 @@ def test_guard_detects_route_drift(change):
 
 
 def test_gate_requires_fresh_complete_matching_result():
-    report = {'expected_ip': '161.77.11.188', 'finished': 100, 'checks': {k: {'state': 'pass'} for k in ['guard', 'claude', 'system']}}
+    report = {'native': {'kind':'exe'}, 'expected_ip': '161.77.11.188', 'finished': 100, 'checks': {k: {'state': 'pass'} for k in ['guard', 'claude', 'system', 'tls']}}
     assert gate(report, '161.77.11.188', now=110)[0]
     assert not gate(report, '161.77.11.188', now=161)[0]
     assert not gate(report, '161.77.11.189', now=110)[0]
@@ -107,9 +107,10 @@ def test_persistent_rules_are_idempotent_and_preserve_unrelated_routes():
     assert not any('PROCESS-NAME,node.exe' in r for r in once['rules'])
 
 
-def test_persistent_guard_rejects_fallback_group():
-    with pytest.raises(RuntimeError):
-        transform({'proxy-groups': [{'name': GROUP, 'proxies': ['ISP', 'DIRECT']}]})
+def test_persistent_guard_preserves_unusable_subscription_instead_of_throwing():
+    config={'proxy-groups':[{'name':GROUP,'proxies':['ISP','DIRECT']}], 'rules':['MATCH,DIRECT']}
+    assert transform(copy.deepcopy(config)) == config
+    assert transform({'rules':['MATCH,DIRECT']}) == {'rules':['MATCH,DIRECT']}
 
 
 def test_strict_tun_route_is_not_required_for_client_preflight():
@@ -124,3 +125,63 @@ def test_retired_apply_cannot_touch_clash():
         with pytest.raises(RuntimeError, match='旧版自动配置已停用'):
             apply()
         snapshot.assert_not_called()
+
+
+def test_restore_refuses_overwriting_user_changes():
+    import configure
+    base=configure.ROOT/'reports'/'fake-clash'
+    backup=base/'ipdesk-backups'/'sample'
+    receipt=json.dumps({'backup':str(backup),'changed':{str(base/'Script.js'):'old-hash'}})
+    with patch('configure.BASE',base),patch('pathlib.Path.read_text',return_value=receipt),patch('configure.digest',return_value='user-change'),patch('configure.request') as reload,patch('configure.shutil.copy2') as copy:
+        with pytest.raises(RuntimeError,match='新修改'):
+            configure.restore()
+        reload.assert_not_called()
+        copy.assert_not_called()
+
+
+def test_restore_reloads_only_the_validated_backup():
+    import configure
+    base=configure.ROOT/'reports'/'fake-clash'
+    backup=base/'ipdesk-backups'/'sample'
+    receipt=json.dumps({'backup':str(backup),'changed':{str(base/'Script.js'):'known-hash'}})
+    with patch('configure.BASE',base),patch('pathlib.Path.read_text',side_effect=[receipt,'mode: rule']),patch('configure.digest',return_value='known-hash'),patch('configure.request') as reload,patch('configure.shutil.copy2') as copy:
+        configure.restore()
+        assert copy.call_count==2
+        reload.assert_called_once_with('PUT','/configs?force=true',{'payload':'mode: rule'})
+
+
+def test_safe_local_prefix_and_duplicate_do_not_false_alarm():
+    data=runtime()
+    data['rules'].insert(0,{'type':'IPCIDR','payload':'127.0.0.0/8','proxy':'DIRECT'})
+    data['rules'].insert(3,copy.deepcopy(data['rules'][1]))
+    assert validate_guard(data)['state']=='pass'
+
+
+def test_early_domain_rule_cannot_bypass_udp_reject():
+    data=runtime()
+    data['rules'].insert(0,{'type':'DomainSuffix','payload':'claude.ai','proxy':GROUP})
+    assert validate_guard(data)['state']=='fail'
+
+
+def test_rule_generator_changes_no_globals():
+    config={'proxy-groups':[{'name':GROUP,'proxies':['ISP']}], 'find-process-mode':'strict',
+            'dns':{'nameserver':['https://example.com/dns-query']},'tun':{'enable':True,'strict-route':False},'rules':['MATCH,DIRECT']}
+    transformed=transform(copy.deepcopy(config))
+    assert {k:v for k,v in transformed.items() if k!='rules'} == {k:v for k,v in config.items() if k!='rules'}
+
+
+def test_step_progress_uses_real_results_and_does_not_auto_pass_failures():
+    from network import run_checks
+    events = []
+    with patch('network.native_claude', return_value={'kind':'exe','label':'Claude','target':'Claude.exe'}), \
+         patch('network.controller', return_value=runtime()), \
+         patch('network.trace_probe', return_value={'state':'pass','value':'161.77.11.188','ip':'161.77.11.188'}), \
+         patch('network.environment_diagnostics', return_value=[]), \
+         patch('network.run_probes', return_value={'tls':{'state':'fail','value':'证书验证失败'},'dns':{'state':'info'},'ipv6':{'state':'unknown'}}), \
+         patch('network.system_proxy', return_value='未修改'):
+        data = run_checks('161.77.11.188', lambda key,value: events.append((key,value)))
+    assert [v['step'] for k,v in events if k=='progress'] == ['client','guard','exit','tls']
+    keys = [k for k,v in events]
+    assert keys.index('client') < keys.index('guard') < keys.index('claude') < keys.index('system') < keys.index('tls')
+    assert data['checks']['tls']['state'] == 'fail'
+    assert not gate(data,'161.77.11.188')[0]

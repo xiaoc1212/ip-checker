@@ -1,4 +1,3 @@
-import concurrent.futures
 import ipaddress
 import json
 import os
@@ -9,6 +8,7 @@ import time
 import winreg
 
 import requests
+from diagnostics import environment_diagnostics, run_probes
 
 ROOT = Path(__file__).resolve().parent
 EXPECTED_IP = '161.77.11.188'
@@ -75,6 +75,38 @@ def expected_guard_rules():
     return rules
 
 
+def guard_rule_order(rules):
+    """Conservative precedence proof, permitting only known-safe interleaving.
+
+    Local DIRECT rules and already satisfied duplicates cannot alter the covered
+    external routes. Other predecessors remain unverified, rather than guessed.
+    """
+    expected = expected_guard_rules()
+    position = 0
+    local_networks = [ipaddress.ip_network(n) for n in
+                      ['127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '::1/128']]
+    for original in rules:
+        if (original.get('extra') or {}).get('disabled'):
+            continue
+        rule = {key: original.get(key) for key in ('type', 'payload', 'proxy')}
+        if rule == expected[position]:
+            position += 1
+            if position == len(expected):
+                return True
+            continue
+        if rule in expected[:position]:
+            continue
+        if rule['type'] in ('IPCIDR', 'IPCIDR6') and rule['proxy'] == 'DIRECT':
+            try:
+                network = ipaddress.ip_network(rule['payload'])
+                if any(network.version == local.version and network.subnet_of(local) for local in local_networks):
+                    continue
+            except ValueError:
+                pass
+        return False
+    return False
+
+
 def validate_guard(snapshot):
     cfg = snapshot['config']
     reasons = []
@@ -95,8 +127,7 @@ def validate_guard(snapshot):
         reasons.append('固定出口节点类型已变更，需要重新核验')
     rules = snapshot.get('rules', [])
     expected = expected_guard_rules()
-    actual = [{k: r.get(k) for k in ('type', 'payload', 'proxy')} for r in rules[:len(expected)]]
-    if actual != expected or any((r.get('extra') or {}).get('disabled') for r in rules[:len(expected)]):
+    if not guard_rule_order(rules):
         reasons.append('尚未核验完整客户端规则（进程、域名、UDP、本地例外及优先级）；不自动修改配置')
     if reasons:
         return result('fail', '规则需要处理', '；'.join(reasons))
@@ -167,7 +198,7 @@ def trace_probe(expected, port, system=False, generic=False):
     except Exception as exc:
         # A request error is not evidence of a leak or a successful test.
         detail = '连接超时' if isinstance(exc, requests.Timeout) else '未取得有效结果（' + type(exc).__name__ + '）'
-        return result('unknown', '未确认', detail + '；' + scope, error=str(exc)[:350])
+        return result('unknown', '未确认', detail + '；' + scope, error=type(exc).__name__)
 
 
 def geo_probe(ip, port):
@@ -250,9 +281,23 @@ def local_file_port():
 def run_checks(expected, emit=lambda key, value: None):
     ipaddress.IPv4Address(expected)
     report = {'expected_ip': expected, 'started': time.time(), 'checks': {}}
+    report['environment'] = environment_diagnostics()
     def add(key, value):
         report['checks'][key] = value
         emit(key, value)
+    def stage(step, label):
+        emit('progress', {'step': step, 'label': label})
+
+    stage('client', '识别本机客户端')
+    try:
+        native = native_claude()
+    except Exception:
+        native = None
+    report['native'] = native
+    add('client', result('info' if native else 'unknown', '已安装' if native else '未发现原生客户端',
+                         native['label'] if native else '请安装官方 Claude 客户端后重新检查'))
+
+    stage('guard', '核对代理与专用规则')
     try:
         snap = controller()
         port = int(snap['config']['mixed-port'])
@@ -260,40 +305,41 @@ def run_checks(expected, emit=lambda key, value: None):
         report['client_evidence'] = client_evidence(snap)
         report['runtime'] = {'mode': snap['config'].get('mode'), 'tun': snap['config'].get('tun', {}).get('enable'),
                              'ipv6': snap['config'].get('ipv6'), 'mixed_port': port}
-        active_rules = [r for r in snap.get('rules', []) if not (r.get('extra') or {}).get('disabled')]
-        report['runtime']['stun_blocked'] = all(any(r.get('type') == typ and str(r.get('payload')) == payload and r.get('proxy') == 'REJECT' for r in active_rules) for typ, payload in [('DomainKeyword', 'stun'), ('DstPort', '3478'), ('DstPort', '19302')])
     except Exception as exc:
         port = local_file_port()
-        add('guard', result('unknown', '实时配置未确认', str(exc)))
-    jobs = {'claude': lambda: trace_probe(expected, port),
-            'general': lambda: trace_probe(expected, port, generic=True),
-            'native': native_claude}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(fn): name for name, fn in jobs.items()}
-        for future in concurrent.futures.as_completed(futures):
-            name = futures[future]
-            try:
-                value = future.result()
-            except Exception:
-                value = None if name == 'native' else result('unknown', '未确认', '检测未能完成')
-            if name == 'native':
-                report['native'] = value
-                add('client', result('info' if value else 'unknown', '已安装' if value else '未发现原生客户端',
-                                    value['label'] if value else '安装后点击重新检测；旧的网页应用不计作原生客户端。'))
-            else:
-                add(name, value)
-    # Avoid simultaneous trace requests to Claude through two paths. The ISP
-    # chain can stall one of the concurrent handshakes while sequential probes work.
+        add('guard', result('unknown', '实时配置未确认', type(exc).__name__ + '：未取得运行证据'))
+
+    stage('exit', '实测两条 Claude 出口路径')
+    add('claude', trace_probe(expected, port))
     add('system', trace_probe(expected, port, system=True))
-    measured_ip = report['checks']['claude'].get('ip')
-    add('geo', geo_probe(measured_ip, port) if measured_ip else result('unknown', '未查询', '尚未取得 Claude 出口地址'))
+
+    stage('tls', '验证证书与连接')
+    # These are real sequential stages. No presentation delay or fabricated pass.
+    for key, probe in run_probes(expected, port).items():
+        add(key, probe)
+    for evidence in report.get('client_evidence', []):
+        if evidence['label'] == 'IPv6 旁路':
+            probe = report['checks'].get('ipv6', {})
+            evidence.update(state=probe.get('state', 'unknown'), detail=probe.get('detail', '未完成'))
     report['finished'] = time.time()
     report['system_proxy'] = system_proxy()
     report['limitations'] = ['这是检测工具的请求结果；客户端连接以实时观察记录为准。',
                              'DNS / WebRTC 泄露未实测，不能据此显示无泄露。',
-                             'IPv6 为代理运行设置核对，不等同于整台电脑无 IPv6 泄露。',
+                             'IPv6 系统出口为参考，失败不证明无旁路，也不作为客户端已泄露的证据。',
                              '代理退出后的系统级断网保护未部署。']
     return report
+
+
+def startup_rows(report, expected, now=None):
+    now = time.time() if now is None else now
+    checks = (report or {}).get('checks', {})
+    fresh = bool(report and report.get('expected_ip') == expected and 0 <= now - report.get('finished', 0) <= 60)
+    rows = [{'label': label, 'state': checks.get(key, {}).get('state', 'unknown')}
+            for key, label in [('claude', '代理请求出口一致'), ('system', '系统请求出口一致'),
+                               ('guard', '客户端规则覆盖'), ('tls', '证书与 Claude 服务链路')]]
+    rows += [{'label': '原生客户端安装', 'state': 'pass' if (report or {}).get('native') else 'unknown'},
+             {'label': '本次预检有效期（60 秒）', 'state': 'pass' if fresh else 'expired' if report else 'unknown'}]
+    return rows
 
 
 def gate(report, expected, now=None):
@@ -302,9 +348,8 @@ def gate(report, expected, now=None):
         return False, '请先检测当前目标 IP'
     if now - report.get('finished', 0) > 60 or now < report.get('finished', 0):
         return False, '检测结果已过期，请重新检测'
-    for key in ('guard', 'claude', 'system'):
-        if report.get('checks', {}).get(key, {}).get('state') != 'pass':
-            return False, '固定出口或接管状态未全部确认，已停止启动'
+    if any(row['state'] != 'pass' for row in startup_rows(report, expected, now)):
+        return False, '出口、客户端规则或证书链路未全部确认，已停止启动'
     return True, '固定出口预检通过'
 
 
