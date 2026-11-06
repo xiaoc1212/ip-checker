@@ -20,6 +20,33 @@ GROUPS = [
     {'id': 'mail', 'name': '邮箱'},
     {'id': 'network', 'name': '网络工具'},
     {'id': 'projects', 'name': '自定义与项目'},
+    {'id': 'ai_creative', 'name': 'AI 视频与生图'},
+    {'id': 'assets', 'name': '素材与资源'},
+    {'id': 'media', 'name': '影音与社区'},
+    {'id': 'ai_reference', 'name': 'AI 信息与工具'},
+    {'id': 'vpn_services', 'name': 'VPN 与机场'},
+]
+LEGACY_GROUPS = GROUPS[:7]
+BOOKMARKS = [
+    ["runninghub","RunningHub","ai_creative","https://www.runninghub.cn/"],
+    ["xiaoyunque","小云雀","ai_creative","https://xyq.jianying.com/"],
+    ["libtv","LibTV","ai_creative","https://www.libtv.com/"],
+    ["jimeng","即梦","ai_creative","https://jimeng.jianying.com/"],
+    ["aigei","爱给网","assets","https://www.aigei.com/"],
+    ["unity-store","Unity Asset Store","assets","https://assetstore.unity.com/"],
+    ["youtube","YouTube","media","https://www.youtube.com/"],
+    ["bilibili","B站","media","https://www.bilibili.com/"],
+    ["xiaozhi","小智控制台","ai_reference","https://xiaozhi.me/console/agents"],
+    ["priceai","PriceAI","ai_reference","https://priceai.io/"],
+    ["opentherank","OpenTheRank","ai_reference","https://opentherank.com/zh/ai-pricing/chatgpt/"],
+    ["wgetcloud","WgetCloud","vpn_services","https://wgetcloud.org/"],
+    ["justmysocks","Just My Socks","vpn_services","https://justmysocks.net/"],
+    ["flyingbird","FlyingBird","vpn_services","https://flyingbird.cc/"],
+    ["tag-internet","TAG Internet","vpn_services","https://www.tagvpn.vip/"],
+    ["nexitally","Nexitally","vpn_services","https://nexitally.com/"],
+    ["mojie","魔戒","vpn_services","https://mojie.co/"],
+    ["astrill","Astrill","vpn_services","https://www.astrill.com/"],
+    ["letsvpn","LetsVPN","vpn_services","https://letsvpn.world/"],
 ]
 GROUP_IDS = {group['id'] for group in GROUPS}
 LAUNCH_TYPES = {'web', 'exe', 'uwp', 'folder', 'claude_protected'}
@@ -210,6 +237,7 @@ def defaults(discovered=None):
         ('static-ip-admin', '静态 IP 管理后台', 'network', 'web', ''),
         ('vpn-web', '主用 VPN 官网', 'network', 'web', ''),
     ]
+    entries.extend((item_id, name, group, 'web', url) for item_id, name, group, url in BOOKMARKS)
     items = [make_item(*entry) for entry in entries]
     for item in items:
         found = (discovered or {}).get(item['id'])
@@ -245,7 +273,7 @@ class LauncherStore:
 
     def _validate(self, data):
         if (not isinstance(data, dict) or set(data) != {'version', 'groups', 'items', 'subscriptions'}
-                or data['version'] != 1 or data['groups'] != GROUPS):
+                or data['version'] != 1 or data['groups'] not in (GROUPS, LEGACY_GROUPS)):
             invalid('配置版本或分组无效')
         for key, validate in [('items', validate_item), ('subscriptions', validate_subscription)]:
             rows = data[key]
@@ -259,6 +287,14 @@ class LauncherStore:
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
             self._validate(data)
+            if data['groups'] == LEGACY_GROUPS:
+                data['groups'] = deepcopy(GROUPS)
+                known_ids = {item['id'] for item in data['items']}
+                known_urls = {item['target_config']['target'].rstrip('/') for item in data['items'] if item['launch_type'] == 'web'}
+                for item_id, name, group, url in BOOKMARKS:
+                    if item_id not in known_ids and url.rstrip('/') not in known_urls:
+                        data['items'].append(make_item(item_id, name, group, 'web', url))
+                self._write(data)
             return data
         except (OSError, ValueError, TypeError, KeyError, LauncherError) as exc:
             raise LauncherError(503, 'storage_unavailable', '启动台配置不可读或已损坏，请恢复备份；原文件未覆盖') from exc
