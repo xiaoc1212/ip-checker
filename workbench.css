@@ -118,3 +118,27 @@ dialog::backdrop{background:#06080BB0;backdrop-filter:blur(5px)}.wb-modal{backgr
 @media(max-width:1050px){.wb-resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wb-directory-heading{flex-wrap:wrap}}
 @media(max-width:600px){.wb-resource-grid{grid-template-columns:1fr}.wb-site-directory{padding:14px}.wb-resource-card{padding:14px}.wb-directory-date{white-space:normal}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+
+/* Personal workspace: compact cards, secondary detail on hover. */
+.workbench{padding-top:10px}.wb-header{margin-bottom:7px}
+.wb-network-ribbon{display:flex;align-items:center;flex-wrap:wrap;gap:14px;min-height:34px;padding:4px 10px;margin-bottom:12px;background:var(--bg-recessed);border:var(--recess-border);border-radius:6px;color:var(--text-secondary);font:12px/1.4 var(--mono)}
+.wb-network-ribbon span{white-space:nowrap}.wb-network-ribbon #publicIp{color:#93C5FD}.wb-network-ribbon #refreshPulse{margin-left:auto;border:0;background:transparent;color:var(--text-secondary);cursor:pointer}
+.wb-highlights{padding:8px 12px;margin-bottom:10px}.wb-shortcut-row{min-height:48px;gap:6px;padding:0}.wb-shortcut-row>.wb-tile{height:48px}
+.wb-groups{gap:10px}.wb-group{padding:10px}.wb-group-heading{margin-bottom:8px}.wb-group-grid{grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:6px}
+.wb-tile{height:52px}.wb-tile-launch{padding:6px 48px 6px 8px;gap:8px}.wb-tile-name{font-size:13px}.wb-tile-kind{display:none}.wb-tile-more{right:6px;width:26px;height:26px}
+.wb-app-icon,.wb-app-icon.google_ai,.wb-app-icon.gpt_claude,.wb-app-icon.network,.wb-app-icon.mail,.wb-app-icon.daily_apps,.wb-app-icon.claude{width:32px;height:32px;font-size:18px}.wb-app-icon svg{width:24px;height:24px}
+.wb-site-directory{margin-top:12px;padding:12px}.wb-directory-heading p,.wb-directory-date{display:none}
+.wb-resource-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.wb-resource-card{padding:10px;gap:6px}.wb-resource-mark{width:28px;height:28px;font-size:13px}.wb-resource-title h3{font-size:13px}
+.wb-resource-category,.wb-resource-description,.wb-resource-domain,.wb-resource-source{display:none}.wb-resource-actions{padding-top:0;gap:4px}.wb-resource-actions .wb-text-button,.wb-resource-actions .wb-secondary{font-size:11px;min-height:28px;padding:4px 7px}
+#claudeDrawer .topbar{min-height:32px;margin-bottom:8px}#claudeDrawer .launch-layout{gap:10px}
+#claudeDrawer .check-panel,#claudeDrawer .launch-card{padding:12px;align-self:start}
+#claudeDrawer .panel-heading{padding-bottom:8px}#claudeDrawer .panel-heading p,#claudeDrawer .app-identity p,#claudeDrawer .launch-hint{display:none}
+#claudeDrawer .steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;grid-auto-rows:min-content;gap:7px;padding:8px 0;flex:none}
+#claudeDrawer .step{min-height:0!important;display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:5px 8px;padding:10px!important;align-content:center}
+#claudeDrawer .step:not(:last-child):before{display:none}#claudeDrawer .step-symbol{width:30px;height:30px;grid-column:1;grid-row:1}
+#claudeDrawer .step-body{grid-column:2;grid-row:1;padding:0}#claudeDrawer .step-title{font-size:13px;line-height:1.45}#claudeDrawer .step-result{grid-column:3;grid-row:1;margin:0;font-size:11px}
+#claudeDrawer .step-desc{display:none}#claudeDrawer .step.fail .step-desc,#claudeDrawer .step.unknown .step-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:11px;line-height:1.5;margin-top:3px}
+#claudeDrawer .step-detail{font-size:11px;margin-top:4px}#claudeDrawer .step-detail:not([open]){display:none}#claudeDrawer .step-detail[open]{display:block}#claudeDrawer .step-detail p{max-height:130px;overflow:auto;padding:6px;line-height:1.5}
+#claudeDrawer .progress-footer{padding-top:8px}#claudeDrawer .app-identity{padding:0 0 6px}#claudeDrawer .target,#claudeDrawer .launch-message{margin:8px 0}
+#claudeDrawer .live-panel{margin-top:10px;padding:10px}#claudeDrawer .attention-strip{margin-top:10px}#claudeDrawer .advanced{margin-top:10px}
+@media(max-width:760px){.wb-network-ribbon{gap:7px;font-size:11px}#claudeDrawer .steps{grid-template-columns:1fr}.wb-group-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
