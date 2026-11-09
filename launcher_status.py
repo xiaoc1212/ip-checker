@@ -19,6 +19,8 @@ class LauncherStatus:
         self.exit = {'state': 'unknown', 'region': '', 'ip': '', 'latency_ms': None, 'checked': 0, 'detail': '尚未查询出口 IP'}
         self.local_cache = None
         self.traffic_sample = None
+        self.provider_lock = threading.Lock()
+        self.provider_cache = None
 
     def local(self, force=False):
         with self.lock:
@@ -74,3 +76,25 @@ class LauncherStatus:
             return deepcopy(result)
         finally:
             self.refresh_lock.release()
+
+    def providers(self, force=False):
+        """Use local Mihomo named-pipe API, never attempt remote account logins."""
+        with self.provider_lock:
+            if self.provider_cache and not force and time.time() - self.provider_cache['checked'] < 60:
+                return deepcopy(self.provider_cache)
+            from network import ROOT, python_exe
+            try:
+                process = subprocess.run(
+                    [python_exe(), str(ROOT / 'controller_helper.py'), '--providers'],
+                    capture_output=True, timeout=10, creationflags=HIDDEN)
+                if process.returncode:
+                    raise RuntimeError('代理提供者读取失败')
+                data = __import__('json').loads(process.stdout.decode('utf-8'))
+                if not data.get('ok') or not isinstance(data.get('data', {}).get('providers'), dict):
+                    raise RuntimeError('无法从 Clash 获取订阅信息')
+                result = {'providers': data['data']['providers'], 'checked': time.time(), 'source': 'mihomo', 'warning': ''}
+            except (OSError, ValueError, TypeError, RuntimeError, subprocess.TimeoutExpired, UnicodeError, KeyError):
+                result = {'providers': {}, 'checked': time.time(), 'source': 'unavailable',
+                          'warning': '本次无法读取 Clash 提供者的套餐数据；可手动填写或稍后重试'}
+            self.provider_cache = result
+            return deepcopy(result)
