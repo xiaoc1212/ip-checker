@@ -101,7 +101,9 @@
     const card=el('div','wb-tile');card.dataset.id=item.id;card.draggable=zone!=='recent';
     const button=el('button','wb-tile-launch');button.type='button';button.setAttribute('aria-label','打开 '+item.name);button.title=item.name;button.disabled=state.opening.has(item.id);const label=el('span','wb-tile-label');label.append(el('span','wb-tile-name',item.name));if(item.target_config?.profile)label.append(el('span','wb-tile-profile',item.target_config.profile));button.append(appIcon(item),label);button.onclick=()=>openItem(item);
     const more=el('button','wb-tile-more','⋯');more.type='button';more.setAttribute('aria-label',item.name+' 更多操作');more.onclick=event=>openMenu(item,event);
-    card.append(button,el('span','wb-tile-kind '+item.launch_type,typeNames[item.launch_type]),more);card.oncontextmenu=event=>{event.preventDefault();openMenu(item,event);};
+    const kindSymbol={exe:'▣',uwp:'▣',folder:'▤',claude_protected:'🛡',web:''}[item.launch_type]||'';
+    const kind=el('span','wb-tile-kind '+item.launch_type,kindSymbol);kind.title=typeNames[item.launch_type]||'';
+    card.append(button,kind,more);card.oncontextmenu=event=>{event.preventDefault();openMenu(item,event);};
     card.ondragstart=event=>{state.drag={id:item.id,zone};event.dataTransfer.setData('text/plain',item.id);event.dataTransfer.effectAllowed='move';card.classList.add('dragging');};
     card.ondragend=()=>{state.drag=null;document.querySelectorAll('.dragging,.drag-over').forEach(x=>x.classList.remove('dragging','drag-over'));};
     card.ondragover=event=>{const source=state.items.find(x=>x.id===state.drag?.id);if(source&&(source.group===item.group||zone==='pinned'&&state.drag.zone==='pinned')){event.preventDefault();card.classList.add('drag-over');event.dataTransfer.dropEffect='move';}};
@@ -117,7 +119,7 @@
     const host=byId('launcherGroups');host.replaceChildren();
     const groups=state.group==='pinned'?[{id:'pinned',name:'常用置顶'}]:state.groups.filter(g=>g.id!=='pinned'&&(state.group==='all'||g.id===state.group));
     let shown=0;
-    for(const group of groups){const items=filtered.filter(item=>group.id==='pinned'?item.pinned:item.group===group.id);if(!items.length&&byId('launcherSearch').value)continue;const section=el('section','wb-group');const heading=el('div','wb-group-heading');const glyphs={google_ai:'✦',gpt_claude:'✳',daily_apps:'▣',mail:'✉',network:'◎',projects:'⌘',ai_creative:'🎬',assets:'◈',media:'▶',ai_reference:'▥',vpn_services:'🌐',pinned:'★'};
+    for(const group of groups){const items=filtered.filter(item=>group.id==='pinned'?item.pinned:item.group===group.id);if(!items.length&&byId('launcherSearch').value)continue;const section=el('section','wb-group');const heading=el('div','wb-group-heading');const glyphs={google_ai:'✦',gpt_claude:'✳',daily_apps:'▣',mail:'✉',network:'◎',projects:'⌘',ai_creative:'🎬',assets:'◈',media:'▶',ai_reference:'▥',vpn_services:'🌐',static_ip_providers:'🏠',vpn_backup:'🛟',pinned:'★'};
       const marker=el('span','wb-group-glyph',glyphs[group.id]||'◦');marker.setAttribute('aria-hidden','true');
       heading.append(marker,el('h2','',group.name),el('small','',String(items.length).padStart(2,'0')));section.append(heading);if(items.length){const grid=el('div','wb-group-grid');items.forEach(item=>grid.append(tile(item,'group')));section.append(grid);shown+=items.length;}else{section.append(el('p','wb-empty','还没有项目，点击“添加项目”放入常用目录和工具。'));}host.append(section);}
     // Entries explicitly assigned to the pinned group still appear when viewing all categories.
