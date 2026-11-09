@@ -307,6 +307,11 @@
   async function localStatus(){try{const data=await request('status');indicator('clashIndicator','Clash：'+({running:'运行中',stopped:'未运行',unknown:'待确认'}[data.clash]||'待确认'),data.clash==='running'?'good':data.clash==='stopped'?'bad':'');byId('clashIndicator').title='Clash 进程与代理端口独立检测；代理端口：'+(data.proxy==='connected'?'连通':'断开');renderExit(data.exit);byId('subLiveClash').textContent='Clash：'+({running:'运行中',stopped:'未运行',unknown:'待确认'}[data.clash]||'待确认');const r=data.traffic;const nice=n=>n>=1048576?(n/1048576).toFixed(1)+' MB/s':n>=1024?(n/1024).toFixed(0)+' KB/s':n+' B/s';byId('networkTraffic').textContent=r?'实时流量 ↓'+nice(r.download_bps)+' ↑'+nice(r.upload_bps):'实时流量：待采样';byId('subLiveTraffic').textContent=r?'本机 ↓'+nice(r.download_bps)+' ↑'+nice(r.upload_bps):'本机流量：待采样';}catch{indicator('clashIndicator','Clash：待确认','');byId('clashIndicator').title='本地网络状态暂不可用';}}
   async function refreshNetwork(){if(state.refreshing)return;state.refreshing=true;byId('refreshNetwork').disabled=true;try{await localStatus();renderExit(await request('status/refresh-exit',{}));}catch(error){toast(error.message);}finally{state.refreshing=false;byId('refreshNetwork').disabled=false;}}
   byId('refreshNetwork').onclick=refreshNetwork;byId('refreshPulse').onclick=refreshNetwork;
+  byId('toggleFullscreen').onclick=async()=>{
+    try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}
+    catch{toast('系统阻止了全屏切换，可使用窗口最大化按钮');}
+  };
+  document.addEventListener('fullscreenchange',()=>{byId('toggleFullscreen').textContent=document.fullscreenElement?'⛶ 退出全屏':'⛶ 全屏';});
   window.addEventListener('claude-state',event=>{const s=event.detail;const [label,status]=s.offline?['服务离线','warn']:s.sampling?['采样中','warn']:s.busy?['检测中','warn']:s.changed?['需重检','warn']:s.failed?['需处理','bad']:s.expired?['已过期','warn']:s.ready?['可手动启动','good']:s.report||s.error?['待核验','warn']:['待检测',''];indicator('claudeIndicator','Claude：'+label,status);});
   window.Workbench={request,state,toast,showDialog,showClaude,switchView,loadItems,loadSubscriptions,editItem,editSubscription,appIcon,searchKeys};
   reloadItems();loadSubscriptions().catch(error=>{byId('subscriptionSummary').textContent='订阅：暂不可用';byId('subscriptionCards').replaceChildren(el('p','wb-empty',error.message));});refreshNetwork();
