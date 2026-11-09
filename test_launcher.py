@@ -37,6 +37,10 @@ def test_defaults_and_dynamic_dates(store):
     assert len(data['items']) == 43  # 17 native entries + 26 bookmarked sites
     assert len(data['groups']) == 14  # seven legacy groups + seven new categories
     assert len(data['subscriptions']) == 2
+    assert {item['id'] for item in data['items']} >= {'iproyal','proxy-seller','proxy-cheap','lisahost',
+                                                        'backup-vpn-slot-1','backup-vpn-slot-2','backup-vpn-slot-3'}
+    assert all(item['group'] == 'vpn_backup' and not item['target_config']['target']
+               for item in data['items'] if item['id'].startswith('backup-vpn-slot-'))
     assert all(s['remaining_days'] is None and s['expiry_status'] == 'unfilled' for s in data['subscriptions'])
     sub = data['subscriptions'][0]
     for expiry, days, status in [('2026-11-05', -1, 'expired'), ('2026-11-06', 0, 'due_today'),
@@ -90,6 +94,8 @@ def test_subscription_traffic_and_roles_validation(store):
                 'traffic_used_gb': '25.2'})
     saved = LauncherStore(store.path).snapshot()['subscriptions'][1]
     assert saved['traffic_total_gb'] == '300.5' and saved['usage_role'] == 'backup'
+    store.save('subscriptions', {'id': 'vpn', 'traffic_unlimited': 'yes'})
+    assert store.get('subscriptions', 'vpn')['traffic_unlimited'] == 'yes'
     for field, value in [('usage_role', 'actually-running'), ('traffic_total_gb', '-5'),
                          ('traffic_used_gb', 'infinite'), ('provider_name', 'x'*121), ('traffic_unlimited', 'sometimes')]:
         with pytest.raises(LauncherError):
