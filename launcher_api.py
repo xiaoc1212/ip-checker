@@ -69,11 +69,13 @@ class LauncherAPI:
             if not self.authorized(handler):
                 raise LauncherError(403, 'forbidden_origin', '仅允许从本机启动台页面访问')
             route = urlsplit(handler.path).path[len(self.prefix):]
-            if self.unavailable and route not in ('status', 'status/refresh-exit', 'desktop/status', 'desktop/wake', 'backup/preview', 'backup/restore'):
+            if self.unavailable and route not in ('status', 'status/refresh-exit', 'subscriptions/providers', 'desktop/status', 'desktop/wake', 'backup/preview', 'backup/restore'):
                 raise LauncherError(503, 'storage_unavailable', '启动台配置不可用，请恢复配置；Claude 检查仍可使用')
             if handler.command == 'GET':
                 if route == 'status':
                     return handler.send(200, self.status.local())
+                if route == 'subscriptions/providers':
+                    return handler.send(200, self.status.providers(force=urlsplit(handler.path).query == 'refresh=1'))
                 if route == 'desktop/status':
                     return handler.send(200, self.desktop.snapshot() if self.desktop else {'tray': False, 'hotkey': False, 'wake_count': 0, 'message': ''})
                 if route.startswith(('scanner/', 'icons/', 'workflows', 'backup/')):

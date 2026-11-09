@@ -20,14 +20,54 @@ GROUPS = [
     {'id': 'mail', 'name': '邮箱'},
     {'id': 'network', 'name': '网络工具'},
     {'id': 'projects', 'name': '自定义与项目'},
+    {'id': 'ai_creative', 'name': 'AI 视频与生图'},
+    {'id': 'assets', 'name': '素材与资源'},
+    {'id': 'media', 'name': '影音与社区'},
+    {'id': 'ai_reference', 'name': 'AI 信息与工具'},
+    {'id': 'vpn_services', 'name': 'VPN 与机场'},
+    {'id': 'static_ip_providers', 'name': '静态住宅 IP 备选'},
+    {'id': 'vpn_backup', 'name': '备用机场收藏夹'},
+]
+LEGACY_GROUPS = GROUPS[:7]
+PREVIOUS_GROUPS = GROUPS[:12]
+BOOKMARKS = [
+    ["runninghub","RunningHub","ai_creative","https://www.runninghub.cn/"],
+    ["xiaoyunque","小云雀","ai_creative","https://xyq.jianying.com/"],
+    ["libtv","LibTV","ai_creative","https://www.libtv.com/"],
+    ["jimeng","即梦","ai_creative","https://jimeng.jianying.com/"],
+    ["aigei","爱给网","assets","https://www.aigei.com/"],
+    ["unity-store","Unity Asset Store","assets","https://assetstore.unity.com/"],
+    ["youtube","YouTube","media","https://www.youtube.com/"],
+    ["bilibili","B站","media","https://www.bilibili.com/"],
+    ["xiaozhi","小智控制台","ai_reference","https://xiaozhi.me/console/agents"],
+    ["priceai","PriceAI","ai_reference","https://priceai.io/"],
+    ["opentherank","OpenTheRank","ai_reference","https://opentherank.com/zh/ai-pricing/chatgpt/"],
+    ["wgetcloud","WgetCloud","vpn_services","https://wgetcloud.org/"],
+    ["justmysocks","Just My Socks","vpn_services","https://justmysocks.net/"],
+    ["flyingbird","FlyingBird","vpn_services","https://flyingbird.cc/"],
+    ["tag-internet","TAG Internet","vpn_services","https://www.tagvpn.vip/"],
+    ["nexitally","Nexitally","vpn_services","https://nexitally.com/"],
+    ["mojie","魔戒","vpn_services","https://mojie.co/"],
+    ["astrill","Astrill","vpn_services","https://www.astrill.com/"],
+    ["letsvpn","LetsVPN","vpn_services","https://letsvpn.world/"],
+    ["iproyal","IPRoyal 静态住宅 IP","static_ip_providers","https://iproyal.com/static-residential-proxies/"],
+    ["proxy-seller","Proxy-Seller 静态 ISP","static_ip_providers","https://proxy-seller.com/isp/"],
+    ["proxy-cheap","Proxy-Cheap 住宅代理","static_ip_providers","https://www.proxy-cheap.com/services/static-residential-proxies"],
+    ["lisahost","LisaHost 丽萨主机","static_ip_providers","https://www.lisahost.com/"],
+    ["backup-vpn-slot-1","备用机场 ①（待添加）","vpn_backup",""],
+    ["backup-vpn-slot-2","备用机场 ②（待添加）","vpn_backup",""],
+    ["backup-vpn-slot-3","备用机场 ③（待添加）","vpn_backup",""],
 ]
 GROUP_IDS = {group['id'] for group in GROUPS}
 LAUNCH_TYPES = {'web', 'exe', 'uwp', 'folder', 'claude_protected'}
 BROWSERS = {'msedge.exe', 'chrome.exe', 'firefox.exe', 'brave.exe', 'iexplore.exe', 'opera.exe'}
 TARGET_FIELDS = {'target', 'args', 'working_dir', 'browser', 'profile', 'singleton_process', 'official_url'}
 ITEM_FIELDS = {'id', 'name', 'group', 'launch_type', 'icon', 'pinned', 'last_used', 'use_count', 'target_config'}
-SUB_FIELDS = {'id', 'name', 'purpose', 'expire_date', 'official_url', 'renew_url', 'admin_url',
-              'ip_info', 'notes', 'update_source'}
+LEGACY_SUB_FIELDS = {'id', 'name', 'purpose', 'expire_date', 'official_url', 'renew_url',
+                     'admin_url', 'ip_info', 'notes', 'update_source'}
+SUB_DEFAULTS = {'usage_role': 'unassigned', 'provider_name': '',
+                'traffic_total_gb': '', 'traffic_used_gb': '', 'traffic_unlimited': 'no'}
+SUB_FIELDS = LEGACY_SUB_FIELDS | set(SUB_DEFAULTS)
 ID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
 AUMID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*![A-Za-z0-9._-]+$')
 
@@ -154,9 +194,9 @@ def validate_item(raw):
 
 
 def validate_subscription(raw):
-    if not isinstance(raw, dict) or set(raw) != SUB_FIELDS:
+    if not isinstance(raw, dict) or not LEGACY_SUB_FIELDS.issubset(raw) or set(raw) - SUB_FIELDS:
         invalid('订阅字段不完整或含有未知字段')
-    sub = deepcopy(raw)
+    sub = {**SUB_DEFAULTS, **deepcopy(raw)}
     identifier(sub['id'])
     for key in SUB_FIELDS - {'id'}:
         text(sub[key], key, 8000 if key == 'notes' else 4096)
@@ -172,6 +212,15 @@ def validate_subscription(raw):
         web_url(sub[key], key)
     if sub['update_source'] not in ('手动填写', '自动同步'):
         invalid('订阅更新来源无效')
+    if sub['traffic_unlimited'] not in ('yes', 'no'):
+        invalid('不限流量状态无效')
+    if sub['usage_role'] not in ('primary', 'backup', 'inactive', 'unassigned'):
+        invalid('订阅使用状态无效')
+    if len(sub['provider_name']) > 120:
+        invalid('代理提供者名称过长')
+    for key in ('traffic_total_gb', 'traffic_used_gb'):
+        if sub[key] and not re.fullmatch(r'(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,3})?', sub[key]):
+            invalid('流量以 GB 填写，最多三位小数')
     return sub
 
 
@@ -210,6 +259,7 @@ def defaults(discovered=None):
         ('static-ip-admin', '静态 IP 管理后台', 'network', 'web', ''),
         ('vpn-web', '主用 VPN 官网', 'network', 'web', ''),
     ]
+    entries.extend((item_id, name, group, 'web', url) for item_id, name, group, url in BOOKMARKS)
     items = [make_item(*entry) for entry in entries]
     for item in items:
         found = (discovered or {}).get(item['id'])
@@ -220,7 +270,8 @@ def defaults(discovered=None):
         item['pinned'] = item['id'] in ('gemini', 'chatgpt-web', 'claude-desktop')
     subscriptions = [
         {'id': sub_id, 'name': name, 'purpose': purpose, 'expire_date': '', 'official_url': '',
-         'renew_url': '', 'admin_url': '', 'ip_info': '', 'notes': '', 'update_source': '手动填写'}
+         'renew_url': '', 'admin_url': '', 'ip_info': '', 'notes': '', 'update_source': '手动填写',
+         **SUB_DEFAULTS, 'usage_role': 'primary' if sub_id in ('static-ip', 'vpn') else 'unassigned'}
         for sub_id, name, purpose in [('static-ip', '主用静态 IP', '固定出口'), ('vpn', '主用 VPN', '网络连接')]
     ]
     return {'version': 1, 'groups': deepcopy(GROUPS), 'items': items, 'subscriptions': subscriptions}
@@ -245,7 +296,7 @@ class LauncherStore:
 
     def _validate(self, data):
         if (not isinstance(data, dict) or set(data) != {'version', 'groups', 'items', 'subscriptions'}
-                or data['version'] != 1 or data['groups'] != GROUPS):
+                or data['version'] != 1 or data['groups'] not in (GROUPS, PREVIOUS_GROUPS, LEGACY_GROUPS)):
             invalid('配置版本或分组无效')
         for key, validate in [('items', validate_item), ('subscriptions', validate_subscription)]:
             rows = data[key]
@@ -259,6 +310,21 @@ class LauncherStore:
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
             self._validate(data)
+            if any(set(row) != SUB_FIELDS for row in data['subscriptions']):
+                data['subscriptions'] = [validate_subscription(row) for row in data['subscriptions']]
+                changed = True
+            else:
+                changed = False
+            if data['groups'] in (LEGACY_GROUPS, PREVIOUS_GROUPS):
+                changed = True
+                data['groups'] = deepcopy(GROUPS)
+                known_ids = {item['id'] for item in data['items']}
+                known_urls = {item['target_config']['target'].rstrip('/') for item in data['items'] if item['launch_type'] == 'web'}
+                for item_id, name, group, url in BOOKMARKS:
+                    if item_id not in known_ids and url.rstrip('/') not in known_urls:
+                        data['items'].append(make_item(item_id, name, group, 'web', url))
+            if changed:
+                self._write(data)
             return data
         except (OSError, ValueError, TypeError, KeyError, LauncherError) as exc:
             raise LauncherError(503, 'storage_unavailable', '启动台配置不可读或已损坏，请恢复备份；原文件未覆盖') from exc
@@ -314,7 +380,7 @@ class LauncherStore:
             else:
                 seed = previous or {'id': item_id, 'name': '', 'purpose': '', 'expire_date': '',
                                     'official_url': '', 'renew_url': '', 'admin_url': '', 'ip_info': '',
-                                    'notes': '', 'update_source': '手动填写'}
+                                    'notes': '', 'update_source': '手动填写', **SUB_DEFAULTS}
                 if set(raw) - SUB_FIELDS:
                     invalid('剩余天数由后端计算，或请求含有未知字段')
                 merged = {**seed, **raw}

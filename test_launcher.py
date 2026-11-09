@@ -34,9 +34,13 @@ def store(tmp_path):
 
 def test_defaults_and_dynamic_dates(store):
     data = store.snapshot()
-    assert len(data['items']) == 17
-    assert len(data['groups']) == 7
+    assert len(data['items']) == 43  # 17 native entries + 26 bookmarked sites
+    assert len(data['groups']) == 14  # seven legacy groups + seven new categories
     assert len(data['subscriptions']) == 2
+    assert {item['id'] for item in data['items']} >= {'iproyal','proxy-seller','proxy-cheap','lisahost',
+                                                        'backup-vpn-slot-1','backup-vpn-slot-2','backup-vpn-slot-3'}
+    assert all(item['group'] == 'vpn_backup' and not item['target_config']['target']
+               for item in data['items'] if item['id'].startswith('backup-vpn-slot-'))
     assert all(s['remaining_days'] is None and s['expiry_status'] == 'unfilled' for s in data['subscriptions'])
     sub = data['subscriptions'][0]
     for expiry, days, status in [('2026-11-05', -1, 'expired'), ('2026-11-06', 0, 'due_today'),
@@ -59,6 +63,59 @@ def test_subscription_crud_validation_and_restart(store):
             store.save('subscriptions', {'id': 'static-ip', **payload})
     store.delete('subscriptions', 'secondary')
     assert len(store.snapshot()['subscriptions']) == 2
+
+
+
+def test_legacy_subscription_upgrade_preserves_entries(store):
+    import launcher_store as module
+    raw = store._read()
+    raw['groups'] = module.LEGACY_GROUPS
+    raw['items'] = [entry for entry in raw['items'] if entry['group'] in {g['id'] for g in module.LEGACY_GROUPS}]
+    for sub in raw['subscriptions']:
+        for field in module.SUB_DEFAULTS:
+            sub.pop(field)
+    raw['subscriptions'][1]['expire_date'] = '2027-02-17'
+    raw['subscriptions'][1]['notes'] = 'keep these notes'
+    store.path.write_text(json.dumps(raw, ensure_ascii=False), encoding='utf-8')
+    current = LauncherStore(store.path).snapshot()
+    assert len(current['groups']) == 14
+    assert current['subscriptions'][1]['notes'] == 'keep these notes'
+    assert current['subscriptions'][1]['expire_date'] == '2027-02-17'
+    assert current['subscriptions'][1]['usage_role'] == 'unassigned'
+    assert any(item['id'] == 'runninghub' for item in current['items'])
+    count = len(current['items'])
+    LauncherStore(store.path)
+    assert len(LauncherStore(store.path).snapshot()['items']) == count
+
+
+def test_subscription_traffic_and_roles_validation(store):
+    store.save('subscriptions', {'id': 'vpn', 'usage_role': 'backup',
+                'provider_name': 'MyProvider', 'traffic_total_gb': '300.5',
+                'traffic_used_gb': '25.2'})
+    saved = LauncherStore(store.path).snapshot()['subscriptions'][1]
+    assert saved['traffic_total_gb'] == '300.5' and saved['usage_role'] == 'backup'
+    store.save('subscriptions', {'id': 'vpn', 'traffic_unlimited': 'yes'})
+    assert store.get('subscriptions', 'vpn')['traffic_unlimited'] == 'yes'
+    for field, value in [('usage_role', 'actually-running'), ('traffic_total_gb', '-5'),
+                         ('traffic_used_gb', 'infinite'), ('provider_name', 'x'*121), ('traffic_unlimited', 'sometimes')]:
+        with pytest.raises(LauncherError):
+            store.save('subscriptions', {'id': 'vpn', field: value})
+
+
+
+def test_previous_branch_migrates_and_new_bookmarks_are_not_duplicated(store):
+    import launcher_store as mod
+    raw = store._read()
+    raw['groups'] = mod.PREVIOUS_GROUPS
+    raw['items'] = [item for item in raw['items'] if item['group'] not in ('static_ip_providers', 'vpn_backup')]
+    for sub in raw['subscriptions']:
+        sub.pop('traffic_unlimited', None)
+    store.path.write_text(json.dumps(raw, ensure_ascii=False), encoding='utf-8')
+    newer = LauncherStore(store.path).snapshot()
+    assert len(newer['groups']) == len(mod.GROUPS)
+    assert any(item['id'] == 'iproyal' for item in newer['items'])
+    assert newer['subscriptions'][0]['traffic_unlimited'] == 'no'
+    assert len(LauncherStore(store.path).snapshot()['items']) == len(newer['items'])
 
 
 def test_item_crud_and_delete_never_removes_file(store, tmp_path):

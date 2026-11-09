@@ -6,16 +6,34 @@
  // Only retain entry URLs that passed the local DIRECT HTTP probe on 2026-11-06.
  // Entry reachability is separate from paid-node usability; no speed guarantees.
  const resources=[
-  {id:'wgetcloud',name:'WgetCloud',category:'大陆加速候选 / Clash',mark:'W',color:'#60A5FA',url:'https://wgetcloud.org/',description:'已换为本机直连探测通过的 .org 入口。官网说明支持 Clash；付费节点连接与晚高峰表现需先试用。',source:'本机直连入口通过',directChecked:true},
-  {id:'doggygo',name:'狗狗加速',category:'你的在用服务 / Clash',mark:'狗',color:'#FBBF24',url:'https://userpanel.dginv.click/',description:'你当前使用的订阅。用户面板入口直连探测通过；登录跳转、套餐和各节点可用性需实际确认。',source:'本机直连入口通过',directChecked:true,subscriptionId:'vpn',openLabel:'打开用户面板 ↗'},
+  {"id":"vpn0","name":"WgetCloud","category":"VPN / 机场候选","mark":"W","color":"#93C5FD","url":"https://wgetcloud.org/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏","extra":{"label":"备用入口","url":"https://wget.co/"}},
+  {"id":"doggygo","name":"狗狗加速","category":"VPN / 机场候选","mark":"狗","color":"#93C5FD","url":"https://userpanel.dginv.click/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"原有服务","subscriptionId":"vpn"},
+  {"id":"vpn2","name":"Just My Socks","category":"VPN / 机场候选","mark":"J","color":"#93C5FD","url":"https://justmysocks.net/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏","extra":{"label":"备用入口","url":"https://justmysocks5.net/"}},
+  {"id":"vpn3","name":"FlyingBird","category":"VPN / 机场候选","mark":"F","color":"#93C5FD","url":"https://flyingbird.cc/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏","extra":{"label":"备用入口","url":"https://flyingbird.pro/"}},
+  {"id":"vpn4","name":"TAG Internet","category":"VPN / 机场候选","mark":"T","color":"#93C5FD","url":"https://www.tagvpn.vip/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏","extra":{"label":"备用入口","url":"https://tagss4.com/"}},
+  {"id":"vpn5","name":"Nexitally","category":"VPN / 机场候选","mark":"N","color":"#93C5FD","url":"https://nexitally.com/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏","extra":{"label":"备用入口","url":"https://nexitallysafe.com/"}},
+  {"id":"vpn6","name":"魔戒 Mojie","category":"VPN / 机场候选","mark":"魔","color":"#93C5FD","url":"https://mojie.co/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏","extra":{"label":"备用入口","url":"https://mojie.app/"}},
+  {"id":"vpn7","name":"Astrill","category":"VPN / 机场候选","mark":"A","color":"#93C5FD","url":"https://www.astrill.com/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏"},
+  {"id":"vpn8","name":"LetsVPN","category":"VPN / 机场候选","mark":"L","color":"#93C5FD","url":"https://letsvpn.world/","description":"仅供收藏，是否能在大陆直连及节点质量请实际测试","source":"网站收藏"}
  ];
  const tools=[{id:'seagm',name:'SEAGM 礼品卡',category:'礼品卡 / 账户管理',mark:'S',color:'#FB923C',url:'https://member.seagm.com/',description:'你的礼品卡购买与账户入口。购买前核对卡片地区、币种和适用服务。',source:'你的常用网站',openLabel:'打开会员中心',extra:{label:'礼品卡商城',url:'https://www.seagm.com/'}}];
  function resourceLink(label,url,cls){const a=node('a',label,cls);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
  function renderResources(hostId,sites,canRegister){
   const host=$(hostId);host.replaceChildren();
   for(const site of sites){
-   const card=node('article',undefined,'wb-resource-card');card.dataset.siteId=site.id;
-   const header=node('header'),mark=node('span',site.mark,'wb-resource-mark');mark.style.setProperty('--site-accent',site.color);mark.setAttribute('aria-hidden','true');
+   const card=node('article',undefined,'wb-resource-card');card.dataset.siteId=site.id;card.title=site.description+'\n'+site.source;
+   const header=node('header'),mark=node('span',site.mark,'wb-resource-mark');
+   mark.style.setProperty('--site-accent',site.color);mark.setAttribute('aria-hidden','true');
+   // Known public-provider logos only; never send private custom URLs to a favicon aggregator.
+   try{
+     const url=new URL(site.url);const img=document.createElement('img');img.alt='';img.loading='lazy';img.referrerPolicy='no-referrer';
+     let fallbackUsed=false;
+     img.onerror=()=>{
+       if(!fallbackUsed){fallbackUsed=true;img.src='https://www.google.com/s2/favicons?domain='+encodeURIComponent(url.hostname)+'&sz=64';}
+       else img.remove();
+     };
+     if(url.protocol==='https:'){mark.append(img);img.src=url.origin+'/favicon.ico';}
+   }catch{}
    const title=node('div',undefined,'wb-resource-title');title.append(node('h3',site.name),node('span',site.category,'wb-resource-category'));header.append(mark,title);
    const source=node('span',site.source,'wb-resource-source'+(site.directChecked?' direct-checked':''));if(site.directChecked)source.title='2026-11-06 本机 DIRECT 通道 HTTP 探测通过；未使用所选代理节点。仅代表公开入口响应，未验证付费节点或全部登录跳转。';
    const actions=node('div',undefined,'wb-resource-actions');actions.append(resourceLink(site.openLabel||'打开网站 ↗',site.url,'wb-secondary wb-resource-open'));

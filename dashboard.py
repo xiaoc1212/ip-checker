@@ -208,7 +208,7 @@ def main():
     if not edge.exists(): raise RuntimeError('未找到 Microsoft Edge')
     # The page runs locally in its own desktop-style application window.
     if not resume and '--no-window' not in sys.argv:
-        subprocess.Popen([str(edge), '--app=' + url, '--window-size=1220,950'])
+        subprocess.Popen([str(edge), '--app=' + url, '--start-maximized'])
     def monitor_loop():
         while True:
             dashboard.monitor_once()

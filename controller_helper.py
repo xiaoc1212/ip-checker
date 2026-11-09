@@ -56,10 +56,53 @@ def snapshot():
     }
 
 
+
+def provider_usage():
+    """Read only Mihomo subscription counters; never return nodes, endpoints or secrets."""
+    from datetime import datetime, timedelta, timezone
+    raw = request('GET', '/providers/proxies')
+    providers = raw.get('providers', {}) if isinstance(raw, dict) else {}
+    clean = {}
+    for name, provider in list(providers.items())[:150]:
+        if not isinstance(name, str) or not isinstance(provider, dict):
+            continue
+        info = provider.get('subscriptionInfo') or provider.get('subscription-info') or {}
+        if not isinstance(info, dict):
+            continue
+        def integer(*keys):
+            for key in keys:
+                value = info.get(key)
+                if value is None:
+                    continue
+                try:
+                    result = int(value)
+                    if result >= 0:
+                        return result
+                except (TypeError, ValueError, OverflowError):
+                    pass
+            return None
+        used_up = integer('Upload', 'upload')
+        used_down = integer('Download', 'download')
+        total = integer('Total', 'total')
+        expires = integer('Expire', 'expire')
+        expiry = ''
+        if expires and 0 < expires < 253402300800:
+            try:
+                expiry = datetime.fromtimestamp(expires, timezone(timedelta(hours=8))).date().isoformat()
+            except (ValueError, OverflowError, OSError):
+                pass
+        clean[name[:120]] = {
+            'used_bytes': used_up + used_down if used_up is not None and used_down is not None else None,
+            'total_bytes': total,
+            'expire_date': expiry,
+            'available': bool(info),
+        }
+    return {'providers': clean}
+
 if __name__ == '__main__':
     import sys
     try:
-        result = request('GET', '/connections') if '--connections' in sys.argv else snapshot()
+        result = provider_usage() if '--providers' in sys.argv else request('GET', '/connections') if '--connections' in sys.argv else snapshot()
         print(json.dumps({'ok': True, 'data': result}, ensure_ascii=True))
     except Exception as exc:
         message = '没有读取代理状态的权限' if isinstance(exc, PermissionError) else str(exc)
