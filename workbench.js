@@ -76,7 +76,7 @@
     // Custom/internal URLs never get sent to a third-party icon service.
     const logoIds=new Set(['runninghub','xiaoyunque','libtv','jimeng','aigei','unity-store','youtube',
       'bilibili','xiaozhi','priceai','opentherank','wgetcloud','justmysocks','flyingbird',
-      'tag-internet','nexitally','mojie','astrill','letsvpn']);
+      'tag-internet','nexitally','mojie','astrill','letsvpn','iproyal','proxy-seller','proxy-cheap','lisahost']);
     if(!brand&&item.launch_type==='web'&&logoIds.has(item.id)){
       try{
         const site=new URL(item.target_config.target);
