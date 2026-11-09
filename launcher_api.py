@@ -75,7 +75,7 @@ class LauncherAPI:
                 if route == 'status':
                     return handler.send(200, self.status.local())
                 if route == 'subscriptions/providers':
-                    return handler.send(200, self.status.providers())
+                    return handler.send(200, self.status.providers(force=urlsplit(handler.path).query == 'refresh=1'))
                 if route == 'desktop/status':
                     return handler.send(200, self.desktop.snapshot() if self.desktop else {'tray': False, 'hotkey': False, 'wake_count': 0, 'message': ''})
                 if route.startswith(('scanner/', 'icons/', 'workflows', 'backup/')):
