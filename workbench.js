@@ -267,7 +267,7 @@
     btn.disabled=true;
     byId('providerNotice').textContent='正在读取 Clash 中保存的套餐信息…';
     try{
-      providerSnapshot=await request('subscriptions/providers');
+      providerSnapshot=await request(force?'subscriptions/providers?refresh=1':'subscriptions/providers');
       const names=Object.keys(providerSnapshot.providers||{});
       byId('providerNames').replaceChildren(...names.map(n=>{const option=el('option');option.value=n;return option;}));
       byId('providerNotice').textContent=providerSnapshot.warning||('已读取 '+names.length+' 个 Clash 提供者；按订阅提供者名称精确关联。未导入 Clash 的服务可手动填写。');
