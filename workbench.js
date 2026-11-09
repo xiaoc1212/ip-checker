@@ -72,6 +72,26 @@
   function appIcon(item){
     const icon=el('span','wb-app-icon '+item.group+(item.launch_type==='claude_protected'||item.id==='claude-web'?' claude':''));icon.setAttribute('aria-hidden','true');
     const brand=brandIcon(item.id);icon.append(brand||symbol(item.group==='mail'?'mail':item.launch_type==='folder'?'folder':item.group==='network'?'shield':item.launch_type==='web'?'external':'app'));
+    // First try the official website favicon for known public services, then Google's favicon cache.
+    // Custom/internal URLs never get sent to a third-party icon service.
+    const logoIds=new Set(['runninghub','xiaoyunque','libtv','jimeng','aigei','unity-store','youtube',
+      'bilibili','xiaozhi','priceai','opentherank','wgetcloud','justmysocks','flyingbird',
+      'tag-internet','nexitally','mojie','astrill','letsvpn']);
+    if(!brand&&item.launch_type==='web'&&logoIds.has(item.id)){
+      try{
+        const site=new URL(item.target_config.target);
+        if(site.protocol==='https:'){
+          const favicon=document.createElement('img');favicon.className='wb-web-favicon';
+          favicon.alt='';favicon.loading='lazy';favicon.referrerPolicy='no-referrer';
+          const fallback=[...icon.childNodes];let retried=false;
+          favicon.onerror=()=>{
+            if(!retried){retried=true;favicon.src='https://www.google.com/s2/favicons?domain='+encodeURIComponent(site.hostname)+'&sz=64';}
+            else icon.replaceChildren(...fallback);
+          };
+          icon.replaceChildren(favicon);favicon.src=site.origin+'/favicon.ico';
+        }
+      }catch{}
+    }
     if(!brand&&/^static\/icons\/[a-f0-9]{64}\.png$/.test(item.icon)){
       const fallback=[...icon.childNodes];const img=document.createElement('img');img.alt='';img.loading='lazy';img.src='./api/icons/'+item.icon.split('/').pop();img.onerror=()=>icon.replaceChildren(...fallback);icon.replaceChildren(img);
     }
@@ -97,7 +117,9 @@
     const host=byId('launcherGroups');host.replaceChildren();
     const groups=state.group==='pinned'?[{id:'pinned',name:'常用置顶'}]:state.groups.filter(g=>g.id!=='pinned'&&(state.group==='all'||g.id===state.group));
     let shown=0;
-    for(const group of groups){const items=filtered.filter(item=>group.id==='pinned'?item.pinned:item.group===group.id);if(!items.length&&byId('launcherSearch').value)continue;const section=el('section','wb-group');const heading=el('div','wb-group-heading');heading.append(el('h2','',group.name),el('small','',String(items.length).padStart(2,'0')));section.append(heading);if(items.length){const grid=el('div','wb-group-grid');items.forEach(item=>grid.append(tile(item,'group')));section.append(grid);shown+=items.length;}else{section.append(el('p','wb-empty','还没有项目，点击“添加项目”放入常用目录和工具。'));}host.append(section);}
+    for(const group of groups){const items=filtered.filter(item=>group.id==='pinned'?item.pinned:item.group===group.id);if(!items.length&&byId('launcherSearch').value)continue;const section=el('section','wb-group');const heading=el('div','wb-group-heading');const glyphs={google_ai:'✦',gpt_claude:'✳',daily_apps:'▣',mail:'✉',network:'◎',projects:'⌘',ai_creative:'🎬',assets:'◈',media:'▶',ai_reference:'▥',vpn_services:'🌐',pinned:'★'};
+      const marker=el('span','wb-group-glyph',glyphs[group.id]||'◦');marker.setAttribute('aria-hidden','true');
+      heading.append(marker,el('h2','',group.name),el('small','',String(items.length).padStart(2,'0')));section.append(heading);if(items.length){const grid=el('div','wb-group-grid');items.forEach(item=>grid.append(tile(item,'group')));section.append(grid);shown+=items.length;}else{section.append(el('p','wb-empty','还没有项目，点击“添加项目”放入常用目录和工具。'));}host.append(section);}
     // Entries explicitly assigned to the pinned group still appear when viewing all categories.
     if(state.group==='all'){const items=filtered.filter(item=>item.group==='pinned');if(items.length){const section=el('section','wb-group');section.append(el('h2','wb-group-heading','常用置顶分组'));const grid=el('div','wb-group-grid');items.forEach(item=>grid.append(tile(item,'group')));section.append(grid);host.prepend(section);shown+=items.length;}}
     byId('searchEmpty').hidden=!(byId('launcherSearch').value&&!shown);
