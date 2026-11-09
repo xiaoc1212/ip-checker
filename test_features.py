@@ -47,7 +47,7 @@ def test_url_and_steam_upload_staging_duplicate_confirmation(store):
     with pytest.raises(LauncherError) as error: scanner.pin(body)
     assert error.value.payload['code']=='duplicate_target'
     assert scanner.pin({**body,'allow_duplicate':True})['count']==1
-    assert len(store.snapshot()['items'])==37
+    assert len(store.snapshot()['items'])==44
     assert not list((store.path.parent/'reports'/'shortcut-imports').iterdir())
     steam=scanner.upload({'name':'Game.url','data':encoded(b'[InternetShortcut]\nURL=steam://rungameid/570\n')})
     scanner.pin({**body,'ids':[steam['id']],'group':'daily_apps','allow_duplicate':False})
@@ -63,7 +63,7 @@ def test_url_and_steam_upload_staging_duplicate_confirmation(store):
     ('a.url',b'[InternetShortcut]\nURL=steam://install/123'),('a.url',b'[InternetShortcut]\nURL=steam://run/570//evil')],ids=['exe','traversal','large','file','javascript','steam-install','steam-args'])
 def test_shortcut_upload_rejects_unsupported_paths_sizes_and_protocols(store,name,raw):
     with pytest.raises((LauncherError,ValueError)): AppScanner(store).upload({'name':name,'data':encoded(raw)})
-    assert len(store.snapshot()['items'])==36
+    assert len(store.snapshot()['items'])==43
 
 
 def test_real_native_lnk_keeps_arguments_and_working_directory(store,root):
@@ -265,7 +265,7 @@ def test_valid_backup_can_recover_corrupt_local_configuration(store,workflow):
     store.path.write_text('{broken',encoding='utf-8')
     preview=backup.preview({'data':encoded(raw)})
     result=backup.restore({'id':preview['id']})
-    assert len(store.snapshot()['items'])==36
+    assert len(store.snapshot()['items'])==43
     with zipfile.ZipFile(store.path.parent/'reports'/'backups'/result['backup_name']) as original:
         assert original.read('launcher.json')==b'{broken'
 
