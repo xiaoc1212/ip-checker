@@ -178,3 +178,7 @@ html,body{width:100%;min-width:0}
 .wb-sub-notes{font-size:11px;max-height:56px;overflow:auto;padding:6px}
 @media(min-width:1600px){.wb-groups{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}}
 @media(max-width:720px){.wb-groups{grid-template-columns:1fr}#subscriptionCards{grid-template-columns:1fr}.wb-sub-connection button{margin-left:0}}
+
+/* Provider favicon artwork. A compact initial stays visible when the favicon is unavailable. */
+.wb-resource-mark{position:relative;overflow:hidden}
+.wb-resource-mark img{position:absolute;inset:0;margin:auto;width:24px;height:24px;object-fit:contain;background:var(--bg-window);border-radius:3px}
