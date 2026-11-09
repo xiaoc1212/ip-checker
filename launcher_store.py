@@ -53,8 +53,11 @@ LAUNCH_TYPES = {'web', 'exe', 'uwp', 'folder', 'claude_protected'}
 BROWSERS = {'msedge.exe', 'chrome.exe', 'firefox.exe', 'brave.exe', 'iexplore.exe', 'opera.exe'}
 TARGET_FIELDS = {'target', 'args', 'working_dir', 'browser', 'profile', 'singleton_process', 'official_url'}
 ITEM_FIELDS = {'id', 'name', 'group', 'launch_type', 'icon', 'pinned', 'last_used', 'use_count', 'target_config'}
-SUB_FIELDS = {'id', 'name', 'purpose', 'expire_date', 'official_url', 'renew_url', 'admin_url',
-              'ip_info', 'notes', 'update_source'}
+LEGACY_SUB_FIELDS = {'id', 'name', 'purpose', 'expire_date', 'official_url', 'renew_url',
+                     'admin_url', 'ip_info', 'notes', 'update_source'}
+SUB_DEFAULTS = {'usage_role': 'unassigned', 'provider_name': '',
+                'traffic_total_gb': '', 'traffic_used_gb': ''}
+SUB_FIELDS = LEGACY_SUB_FIELDS | set(SUB_DEFAULTS)
 ID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
 AUMID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*![A-Za-z0-9._-]+$')
 
@@ -181,9 +184,9 @@ def validate_item(raw):
 
 
 def validate_subscription(raw):
-    if not isinstance(raw, dict) or set(raw) != SUB_FIELDS:
+    if not isinstance(raw, dict) or set(raw) not in (SUB_FIELDS, LEGACY_SUB_FIELDS):
         invalid('订阅字段不完整或含有未知字段')
-    sub = deepcopy(raw)
+    sub = {**SUB_DEFAULTS, **deepcopy(raw)}
     identifier(sub['id'])
     for key in SUB_FIELDS - {'id'}:
         text(sub[key], key, 8000 if key == 'notes' else 4096)
@@ -199,6 +202,13 @@ def validate_subscription(raw):
         web_url(sub[key], key)
     if sub['update_source'] not in ('手动填写', '自动同步'):
         invalid('订阅更新来源无效')
+    if sub['usage_role'] not in ('primary', 'backup', 'inactive', 'unassigned'):
+        invalid('订阅使用状态无效')
+    if len(sub['provider_name']) > 120:
+        invalid('代理提供者名称过长')
+    for key in ('traffic_total_gb', 'traffic_used_gb'):
+        if sub[key] and not re.fullmatch(r'(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,3})?', sub[key]):
+            invalid('流量以 GB 填写，最多三位小数')
     return sub
 
 
@@ -248,7 +258,8 @@ def defaults(discovered=None):
         item['pinned'] = item['id'] in ('gemini', 'chatgpt-web', 'claude-desktop')
     subscriptions = [
         {'id': sub_id, 'name': name, 'purpose': purpose, 'expire_date': '', 'official_url': '',
-         'renew_url': '', 'admin_url': '', 'ip_info': '', 'notes': '', 'update_source': '手动填写'}
+         'renew_url': '', 'admin_url': '', 'ip_info': '', 'notes': '', 'update_source': '手动填写',
+         **SUB_DEFAULTS, 'usage_role': 'primary' if sub_id in ('static-ip', 'vpn') else 'unassigned'}
         for sub_id, name, purpose in [('static-ip', '主用静态 IP', '固定出口'), ('vpn', '主用 VPN', '网络连接')]
     ]
     return {'version': 1, 'groups': deepcopy(GROUPS), 'items': items, 'subscriptions': subscriptions}
@@ -287,13 +298,20 @@ class LauncherStore:
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
             self._validate(data)
+            if any(set(row) == LEGACY_SUB_FIELDS for row in data['subscriptions']):
+                data['subscriptions'] = [validate_subscription(row) for row in data['subscriptions']]
+                changed = True
+            else:
+                changed = False
             if data['groups'] == LEGACY_GROUPS:
+                changed = True
                 data['groups'] = deepcopy(GROUPS)
                 known_ids = {item['id'] for item in data['items']}
                 known_urls = {item['target_config']['target'].rstrip('/') for item in data['items'] if item['launch_type'] == 'web'}
                 for item_id, name, group, url in BOOKMARKS:
                     if item_id not in known_ids and url.rstrip('/') not in known_urls:
                         data['items'].append(make_item(item_id, name, group, 'web', url))
+            if changed:
                 self._write(data)
             return data
         except (OSError, ValueError, TypeError, KeyError, LauncherError) as exc:
@@ -350,7 +368,7 @@ class LauncherStore:
             else:
                 seed = previous or {'id': item_id, 'name': '', 'purpose': '', 'expire_date': '',
                                     'official_url': '', 'renew_url': '', 'admin_url': '', 'ip_info': '',
-                                    'notes': '', 'update_source': '手动填写'}
+                                    'notes': '', 'update_source': '手动填写', **SUB_DEFAULTS}
                 if set(raw) - SUB_FIELDS:
                     invalid('剩余天数由后端计算，或请求含有未知字段')
                 merged = {**seed, **raw}
