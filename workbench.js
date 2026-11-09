@@ -124,7 +124,7 @@
     if(state.group==='all'){const items=filtered.filter(item=>item.group==='pinned');if(items.length){const section=el('section','wb-group');section.append(el('h2','wb-group-heading','常用置顶分组'));const grid=el('div','wb-group-grid');items.forEach(item=>grid.append(tile(item,'group')));section.append(grid);host.prepend(section);shown+=items.length;}}
     byId('searchEmpty').hidden=!(byId('launcherSearch').value&&!shown);
   }
-  async function loadItems(){const data=await request('launcher/items');state.items=data.items;state.groups=data.groups;byId('launcherError').hidden=true;renderItems();}
+  async function loadItems(){const data=await request('launcher/items');state.items=data.items;state.groups=data.groups;byId('launcherError').hidden=true;renderItems();renderBackupLibrary();}
   async function reloadItems(){try{await loadItems();}catch(error){byId('launcherError').hidden=false;byId('launcherError').querySelector('span').textContent=error.message;}}
   byId('launcherSearch').oninput=renderItems;byId('retryLauncher').onclick=reloadItems;
   async function openItem(item){
@@ -187,80 +187,123 @@
     if(!Number.isFinite(days))return {days:null,label:'到期日待确认'};
     return {days,label:days<0?'已过期 '+Math.abs(days)+' 天':days===0?'今天到期':'剩余 '+days+' 天'};
   }
+  let currentExitIp='';
   function renderSubscriptions(){
-    const summary=byId('subscriptionSummary');const primary=state.subscriptions.find(s=>s.id==='static-ip');
+    const main=byId('subscriptionCards'),other=byId('secondarySubscriptions');
+    main.replaceChildren();other.replaceChildren();
+    const subs=state.subscriptions;
+    const ip=subs.find(x=>x.id==='static-ip')||subs.find(x=>x.usage_role==='primary'&&/静态|固定|ip/i.test(x.purpose))||null;
+    const vpn=subs.find(x=>x.id==='vpn')||subs.find(x=>x!==ip&&x.usage_role==='primary')||null;
+    const mainSubs=[ip,vpn];
+    const mainIds=new Set(mainSubs.filter(Boolean).map(x=>x.id));
+    const primary=ip;
+    const summary=byId('subscriptionSummary');
     summary.replaceChildren(el('span','wb-expiry '+(primary?.expiry_status||'unfilled'),'⏳ IP：'+(!primary||primary.remaining_days===null?'待配置':expiryLabel(primary))));
-    summary.title=state.subscriptions.map(s=>s.name+'：'+expiryLabel(s)).join('\n');
-    const host=byId('subscriptionCards');host.replaceChildren();
-    const roles=['primary','backup','inactive','unassigned'];
-    const sorted=[...state.subscriptions].sort((a,b)=>roles.indexOf(a.usage_role)-roles.indexOf(b.usage_role));
-    let lastRole='';
-    for(const sub of sorted){
-      const role=sub.usage_role||'unassigned';
-      if(role!==lastRole){
-        lastRole=role;
-        const heading=el('div','wb-sub-title-row');heading.append(el('h3','',({primary:'● 主用订阅',backup:'◌ 备用订阅',inactive:'○ 停用 / 未使用',unassigned:'▫ 未分类订阅'})[role]));
-        heading.style.gridColumn='1 / -1';host.append(heading);
+    summary.title=subs.map(x=>x.name+'：'+expiryLabel(x)).join('\n');
+
+    function makeAction(label,action,disabled){
+      const button=el('button','wb-sub-action',label);button.type='button';button.disabled=!!disabled;button.onclick=()=>{
+        try{const res=action();if(res?.catch)res.catch(e=>toast(e.message||'操作未完成'));}catch(e){toast(e.message||'操作未完成');}
+      };return button;
+    }
+    function card(sub,kind,isMain){
+      const card=el('article','wb-sub-card '+(isMain?'wb-hero-sub':'wb-compact-sub'));
+      if(!sub){
+        card.classList.add('wb-sub-empty');
+        card.append(el('h3','',kind==='ip'?'🏠 静态 IP':'🌐 主用 VPN'));
+        card.append(el('p','wb-sub-blank','尚未登记，点击添加后可显示到期时间和流量。'));
+        card.append(makeAction('＋ 添加订阅',()=>{editSubscription();byId('subRole').value='primary';byId('subPurpose').value=kind==='ip'?'固定出口':'VPN';}));
+        return card;
       }
       const quota=providerQuota(sub),expiry=expiryOf(quota.expiry,sub.remaining_days);
-      const card=el('article','wb-sub-card');card.dataset.subscriptionId=sub.id;
-      const header=el('header'),title=el('div');title.append(el('h3','',sub.name));
-      const tags=el('div','wb-sub-badges');tags.append(el('span','wb-sub-tag '+role,ROLES[role]));
-      tags.append(el('span','wb-sub-tag',quota.source));
-      title.append(tags);
-      const edit=el('button','wb-secondary wb-sub-edit','✎ 编辑');edit.type='button';edit.onclick=()=>editSubscription(sub);
-      header.append(title,edit);card.append(header);
-      const meter=el('div','wb-sub-meter '+(expiry.days===null?'unfilled':expiry.days<0?'expired':expiry.days<=3?'urgent':'normal'));
-      meter.append(el('strong','wb-sub-status',expiry.label));card.append(meter);
-      if(quota.expiry)card.append(el('p','wb-sub-date','到期 '+quota.expiry));
-      const traffic=el('div','wb-sub-traffic');
-      const fmt=n=>n===null?'—':n.toFixed(n<10?2:1)+' GB';
-      traffic.append(el('span','','已用 '+fmt(quota.used)),el('span','','剩余 '+(quota.total!==null&&quota.used!==null?fmt(Math.max(0,quota.total-quota.used)):'—')));
-      card.append(traffic);
-      if(quota.total!==null){
-        card.append(el('p','wb-sub-footer','套餐总流量 '+fmt(quota.total)));
-        if(quota.total>0&&quota.used!==null){
-          const bar=el('div','wb-sub-traffic-meter');const fill=el('span');fill.style.width=Math.max(0,Math.min(100,quota.used/quota.total*100))+'%';bar.append(fill);card.append(bar);
-        }
-      }else card.append(el('p','wb-sub-footer','套餐总流量未登记'));
-      const links=el('div','wb-sub-links');
-      for(const [field,label] of [['admin_url','管理后台'],['renew_url','续费'],['official_url','官网'],['ip_info','复制 IP']]){
-        if(!sub[field])continue;
-        const button=el('button','',label);button.type='button';button.title='打开已保存的链接或复制 IP';
-        button.onclick=async()=>{try{if(field==='ip_info'){await navigator.clipboard.writeText(sub.ip_info);toast('已复制 IP');}else await request('subscriptions/open',{id:sub.id,link:field});}catch(error){toast(error.message||'操作未完成');}};
-        links.append(button);
+      const header=el('header','wb-sub-hero-head');
+      const title=el('div','wb-sub-hero-name');
+      title.append(el('span','wb-sub-icon',kind==='ip'?'🏠':'🌐'),el('h3','',sub.name));
+      const roleLabel=kind==='ip'?'静态 IP · 手动登记':(ROLES[sub.usage_role]||'未分类');
+      let label=roleLabel;
+      if(kind==='ip'){
+        const registered=(sub.ip_info.match(/(?:\d{1,3}\.){3}\d{1,3}/)||[])[0]||'';
+        if(registered&&currentExitIp===registered)label='出口吻合 · '+registered;
+        else if(registered)label='登记地址 · '+registered+'（出口未确认）';
       }
-      if(links.childElementCount)card.append(links);
-      if(sub.ip_info)card.title='登记 IP：'+sub.ip_info+(sub.notes?'\n备注：'+sub.notes:'');
-      else if(sub.notes)card.title=sub.notes;
-      const meta=el('div','wb-sub-meta');const remove=el('button','','移除');remove.type='button';remove.onclick=async()=>{
-        if(!confirm('从工作台移除“'+sub.name+'”？不会取消商家订阅。'))return;
-        try{await request('subscriptions/delete',{id:sub.id});await loadSubscriptions();}catch(error){toast(error.message);}
-      };
-      meta.append(remove);card.append(meta);host.append(card);
-    }
-    // Show all loaded Clash providers, even if they are inactive or not yet registered.
-    // These are read-only ephemeral cards until the user chooses to register one.
-    const linked=new Set(state.subscriptions.map(sub=>sub.provider_name).filter(Boolean));
-    const unlinked=Object.entries(providerSnapshot?.providers||{}).filter(([name])=>!linked.has(name)&&!['default','global'].includes(name.toLowerCase()));
-    if(unlinked.length){
-      const heading=el('div','wb-sub-title-row');heading.style.gridColumn='1 / -1';
-      heading.append(el('h3','','◈ Clash 中未登记的订阅'));host.append(heading);
-      for(const [name,info] of unlinked){
-        const card=el('article','wb-sub-card wb-sub-unlinked');
-        const title=el('h3','',name),tag=el('span','wb-sub-tag backup','Clash 中已配置 · 使用状态未确认');
-        card.append(title,tag);
-        const GB=n=>Number.isFinite(n)&&n>=0?(n/1073741824).toFixed(2)+' GB':'—';
-        const used=Number.isFinite(info.used_bytes)?info.used_bytes:null,total=Number.isFinite(info.total_bytes)?info.total_bytes:null;
-        card.append(el('div','wb-sub-traffic','已用 '+GB(used)+'　/　总额 '+GB(total)));
-        card.append(el('div','wb-sub-footer',info.expire_date?'到期 '+info.expire_date:'到期日未提供'));
-        const save=el('button','wb-secondary','加入管理');save.onclick=()=>{
-          editSubscription();byId('subName').value=name;byId('subProvider').value=name;byId('subRole').value='backup';
-        };card.append(save);host.append(card);
+      const badge=el('span','wb-sub-role '+(sub.usage_role||'unassigned'),label);
+      const edit=makeAction('✎ 编辑',()=>editSubscription(sub));edit.classList.add('wb-sub-edit');
+      header.append(title,badge,edit);card.append(header);
+      const metrics=el('div','wb-sub-two-metrics');
+      const days=el('div','wb-sub-metric');
+      days.append(el('span','wb-sub-metric-label','剩余到期时间'));
+      const d=el('strong','wb-sub-metric-value '+(expiry.days!==null&&expiry.days<=3?'warning':''),
+        expiry.days===null?'—':String(Math.max(0,expiry.days)));
+      days.append(d,el('small','',expiry.days===null?'未填写':'天'));
+      days.append(el('p','wb-sub-metric-foot',quota.expiry?'到期 '+quota.expiry:'日期待填写'));
+      if(expiry.days!==null){
+        const bar=el('div','wb-sub-meter-bar'),fill=el('span');
+        fill.style.width=Math.max(0,Math.min(100,expiry.days/30*100))+'%';
+        bar.append(fill);bar.title='近 30 天到期时间刻度；不是购买周期';days.append(bar);
       }
+      const flow=el('div','wb-sub-metric');
+      flow.append(el('span','wb-sub-metric-label','剩余可用流量'));
+      const unlimited=sub.traffic_unlimited==='yes'&&!quota.synced;
+      const remain=quota.total!==null&&quota.used!==null?Math.max(0,quota.total-quota.used):null;
+      const f=el('strong','wb-sub-metric-value',unlimited?'∞':remain===null?'—':remain.toFixed(remain<10?2:1));
+      flow.append(f,el('small','',unlimited?'不限流量':'GB'));
+      flow.append(el('p','wb-sub-metric-foot',unlimited?'套餐登记为不限流量':quota.total!==null?'总计 '+quota.total.toFixed(1)+' GB · '+quota.source:'总流量待填写'));
+      if(!unlimited&&quota.total!==null&&quota.total>0&&quota.used!==null){
+        const bar=el('div','wb-sub-meter-bar'),fill=el('span');
+        fill.style.width=Math.min(100,Math.max(0,remain/quota.total*100))+'%';bar.append(fill);flow.append(bar);
+      }
+      metrics.append(days,flow);card.append(metrics);
+      const actions=el('div','wb-sub-hero-actions');
+      const selected=['renew_url','admin_url','official_url'].find(field=>sub[field]);
+      actions.append(makeAction('🌐 打开续费 / 后台',()=>request('subscriptions/open',{id:sub.id,link:selected}),!selected));
+      actions.append(makeAction('📋 复制 IP / 订阅信息',async()=>{
+        const content=sub.ip_info||[sub.name,quota.expiry?'到期 '+quota.expiry:'到期未知',
+          unlimited?'不限流量':remain===null?'流量未知':'剩余 '+remain.toFixed(2)+' GB'].join(' · ');
+        await navigator.clipboard.writeText(content);toast('信息已复制');
+      }));
+      card.append(actions);
+      if(sub.notes)card.title='备注：'+sub.notes;
+      return card;
     }
-    if(!state.subscriptions.length&&!unlinked.length)host.append(el('p','wb-empty','尚未登记订阅，且当前未读取到 Clash 的其他提供者。'));
+    main.append(card(ip,'ip',true),card(vpn,'vpn',true));
+    const rest=subs.filter(x=>!mainIds.has(x.id));
+    rest.sort((a,b)=>['backup','inactive','unassigned','primary'].indexOf(a.usage_role)-['backup','inactive','unassigned','primary'].indexOf(b.usage_role));
+    for(const sub of rest)other.append(card(sub,/静态|固定|ip/i.test(sub.purpose)?'ip':'vpn',false));
+    const linked=new Set(subs.map(x=>x.provider_name).filter(Boolean));
+    const providers=Object.entries(providerSnapshot?.providers||{}).filter(([name])=>!linked.has(name)&&!['default','global'].includes(name.toLowerCase()));
+    for(const [name,info] of providers){
+      const row=el('article','wb-sub-card wb-sub-orphan');
+      row.append(el('h3','','◈ '+name),el('p','wb-sub-metric-foot','Clash 已导入 · 未登记，使用状态未确认'));
+      const total=Number.isFinite(info.total_bytes)?(info.total_bytes/1073741824).toFixed(1)+' GB':'未知';
+      row.append(el('p','','套餐总量 '+total+' · '+(info.expire_date||'到期日未知')));
+      row.append(makeAction('＋ 加入管理',()=>{editSubscription();byId('subName').value=name;byId('subProvider').value=name;byId('subRole').value='backup';}));
+      other.append(row);
+    }
+    byId('otherSubscriptionCount').textContent=rest.length+providers.length+' 项';
+    if(!rest.length&&!providers.length)other.append(el('p','wb-sub-blank','暂无其他订阅；需要备用时点击顶部“添加订阅”。'));
   }
+  function renderBackupLibrary(){
+    const render=(group,hostId)=>{
+      const host=byId(hostId);host.replaceChildren();
+      for(const item of state.items.filter(x=>x.group===group)){
+        const line=el('div','wb-backup-item');
+        const logo=appIcon(item);logo.classList.add('wb-backup-item-icon');
+        const content=el('div','wb-backup-name');content.append(el('strong','',item.name));
+        const valid=Boolean(item.target_config?.target);
+        const open=el('button','wb-backup-go',valid?'↗':'填写链接');open.type='button';
+        open.title=valid?'打开 '+item.name:'点击编辑后填写网址';
+        open.onclick=()=>valid?openItem(item):editItem(item);
+        const edit=el('button','wb-backup-edit','✎');edit.type='button';edit.title='编辑或删除此网址';
+        edit.onclick=()=>editItem(item);
+        line.append(logo,content,open,edit);host.append(line);
+      }
+      if(!host.children.length)host.append(el('p','wb-sub-blank','这里还没有收藏，点击上方添加。'));
+    };
+    render('static_ip_providers','backupStaticGrid');render('vpn_backup','backupVpnGrid');
+  }
+  function addBackupSite(group){editItem();byId('tabManual').click();byId('itemGroup').value=group;byId('itemType').value='web';itemTypeChanged();}
+  byId('addStaticIpSite').onclick=()=>addBackupSite('static_ip_providers');
+  byId('addVpnBackup').onclick=()=>addBackupSite('vpn_backup');
   async function loadProviderUsage(force=false){
     const btn=byId('refreshProviders');
     if(!force&&providerSnapshot&&Date.now()/1000-providerSnapshot.checked<60)return;
@@ -282,13 +325,13 @@
     byId('subEditorTitle').textContent=sub?'编辑订阅':'添加订阅';
     for(const [id,key] of [['subName','name'],['subExpiry','expire_date'],['subPurpose','purpose'],['subOfficial','official_url'],['subRenew','renew_url'],['subAdmin','admin_url'],['subIp','ip_info'],['subNotes','notes'],['subProvider','provider_name'],['subTotalGB','traffic_total_gb'],['subUsedGB','traffic_used_gb']])
       byId(id).value=sub?.[key]??'';
-    byId('subRole').value=sub?.usage_role||'unassigned';
+    byId('subRole').value=sub?.usage_role||'unassigned';byId('subUnlimited').checked=sub?.traffic_unlimited==='yes';
     showDialog('subscriptionEditor');
   }
   byId('addSubscription').onclick=()=>editSubscription();
   byId('subscriptionForm').onsubmit=async event=>{
     event.preventDefault();
-    const payload={id:state.editingSub?.id||'sub-'+crypto.randomUUID(),update_source:'手动填写',usage_role:byId('subRole').value};
+    const payload={id:state.editingSub?.id||'sub-'+crypto.randomUUID(),update_source:'手动填写',usage_role:byId('subRole').value,traffic_unlimited:byId('subUnlimited').checked?'yes':'no'};
     for(const [id,key] of [['subName','name'],['subExpiry','expire_date'],['subPurpose','purpose'],['subOfficial','official_url'],['subRenew','renew_url'],['subAdmin','admin_url'],['subIp','ip_info'],['subNotes','notes'],['subProvider','provider_name'],['subTotalGB','traffic_total_gb'],['subUsedGB','traffic_used_gb']])
       payload[key]=byId(id).value.trim();
     byId('saveSubscription').disabled=true;
@@ -303,7 +346,7 @@
   setInterval(()=>{const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Shanghai'});if(day!==subscriptionDay){subscriptionDay=day;loadSubscriptions().catch(()=>{});}},60000);
 
   function indicator(id,text,status){const target=byId(id);target.textContent=text;target.className='wb-indicator '+status;}
-  function renderExit(data){let label='待查询';if(data.checked)label=data.region?(new Intl.DisplayNames(['zh-CN'],{type:'region'}).of(data.region)||data.region):'待确认';indicator('exitIndicator','出口：'+label,data.checked&&data.region?'good':'warn');byId('exitIndicator').title=data.detail+(data.checked?' · '+new Date(data.checked*1000).toLocaleString():'');byId('publicIp').textContent='出口 IP：'+(data.ip||'待查询');byId('subLiveIp').textContent='出口 IP：'+(data.ip||'待查询');byId('publicIp').title=data.detail||'点击刷新查询';byId('networkLatency').textContent='连接耗时：'+(Number.isFinite(data.latency_ms)?data.latency_ms+' ms':'待查询');}
+  function renderExit(data){let label='待查询';if(data.checked)label=data.region?(new Intl.DisplayNames(['zh-CN'],{type:'region'}).of(data.region)||data.region):'待确认';indicator('exitIndicator','出口：'+label,data.checked&&data.region?'good':'warn');byId('exitIndicator').title=data.detail+(data.checked?' · '+new Date(data.checked*1000).toLocaleString():'');byId('publicIp').textContent='出口 IP：'+(data.ip||'待查询');byId('subLiveIp').textContent='出口 IP：'+(data.ip||'待查询');currentExitIp=data.ip||'';if(state.subscriptions.length)renderSubscriptions();byId('publicIp').title=data.detail||'点击刷新查询';byId('networkLatency').textContent='连接耗时：'+(Number.isFinite(data.latency_ms)?data.latency_ms+' ms':'待查询');}
   async function localStatus(){try{const data=await request('status');indicator('clashIndicator','Clash：'+({running:'运行中',stopped:'未运行',unknown:'待确认'}[data.clash]||'待确认'),data.clash==='running'?'good':data.clash==='stopped'?'bad':'');byId('clashIndicator').title='Clash 进程与代理端口独立检测；代理端口：'+(data.proxy==='connected'?'连通':'断开');renderExit(data.exit);byId('subLiveClash').textContent='Clash：'+({running:'运行中',stopped:'未运行',unknown:'待确认'}[data.clash]||'待确认');const r=data.traffic;const nice=n=>n>=1048576?(n/1048576).toFixed(1)+' MB/s':n>=1024?(n/1024).toFixed(0)+' KB/s':n+' B/s';byId('networkTraffic').textContent=r?'实时流量 ↓'+nice(r.download_bps)+' ↑'+nice(r.upload_bps):'实时流量：待采样';byId('subLiveTraffic').textContent=r?'本机 ↓'+nice(r.download_bps)+' ↑'+nice(r.upload_bps):'本机流量：待采样';}catch{indicator('clashIndicator','Clash：待确认','');byId('clashIndicator').title='本地网络状态暂不可用';}}
   async function refreshNetwork(){if(state.refreshing)return;state.refreshing=true;byId('refreshNetwork').disabled=true;try{await localStatus();renderExit(await request('status/refresh-exit',{}));}catch(error){toast(error.message);}finally{state.refreshing=false;byId('refreshNetwork').disabled=false;}}
   byId('refreshNetwork').onclick=refreshNetwork;byId('refreshPulse').onclick=refreshNetwork;
