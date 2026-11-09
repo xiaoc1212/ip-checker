@@ -171,7 +171,7 @@ class Desktop:
             else:
                 edge = Path(os.environ.get('ProgramFiles(x86)', 'C:/Program Files (x86)')) / 'Microsoft/Edge/Application/msedge.exe'
                 if time.monotonic() - self.last_open > 3:
-                    subprocess.Popen([str(edge), '--app=' + self.url, '--window-size=1280,950'], creationflags=subprocess.CREATE_NO_WINDOW)
+                    subprocess.Popen([str(edge), '--app=' + self.url, '--start-maximized'], creationflags=subprocess.CREATE_NO_WINDOW)
                     self.last_open = time.monotonic()
             with self.lock:
                 self.info['wake_count'] += 1
