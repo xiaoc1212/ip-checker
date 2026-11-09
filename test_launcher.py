@@ -34,8 +34,8 @@ def store(tmp_path):
 
 def test_defaults_and_dynamic_dates(store):
     data = store.snapshot()
-    assert len(data['items']) == 36  # 17 native entries + 19 bookmarked sites
-    assert len(data['groups']) == 12  # seven legacy groups + five new categories
+    assert len(data['items']) == 43  # 17 native entries + 26 bookmarked sites
+    assert len(data['groups']) == 14  # seven legacy groups + seven new categories
     assert len(data['subscriptions']) == 2
     assert all(s['remaining_days'] is None and s['expiry_status'] == 'unfilled' for s in data['subscriptions'])
     sub = data['subscriptions'][0]
@@ -74,7 +74,7 @@ def test_legacy_subscription_upgrade_preserves_entries(store):
     raw['subscriptions'][1]['notes'] = 'keep these notes'
     store.path.write_text(json.dumps(raw, ensure_ascii=False), encoding='utf-8')
     current = LauncherStore(store.path).snapshot()
-    assert len(current['groups']) == 12
+    assert len(current['groups']) == 14
     assert current['subscriptions'][1]['notes'] == 'keep these notes'
     assert current['subscriptions'][1]['expire_date'] == '2027-02-17'
     assert current['subscriptions'][1]['usage_role'] == 'unassigned'
@@ -91,9 +91,25 @@ def test_subscription_traffic_and_roles_validation(store):
     saved = LauncherStore(store.path).snapshot()['subscriptions'][1]
     assert saved['traffic_total_gb'] == '300.5' and saved['usage_role'] == 'backup'
     for field, value in [('usage_role', 'actually-running'), ('traffic_total_gb', '-5'),
-                         ('traffic_used_gb', 'infinite'), ('provider_name', 'x'*121)]:
+                         ('traffic_used_gb', 'infinite'), ('provider_name', 'x'*121), ('traffic_unlimited', 'sometimes')]:
         with pytest.raises(LauncherError):
             store.save('subscriptions', {'id': 'vpn', field: value})
+
+
+
+def test_previous_branch_migrates_and_new_bookmarks_are_not_duplicated(store):
+    import launcher_store as mod
+    raw = store._read()
+    raw['groups'] = mod.PREVIOUS_GROUPS
+    raw['items'] = [item for item in raw['items'] if item['group'] not in ('static_ip_providers', 'vpn_backup')]
+    for sub in raw['subscriptions']:
+        sub.pop('traffic_unlimited', None)
+    store.path.write_text(json.dumps(raw, ensure_ascii=False), encoding='utf-8')
+    newer = LauncherStore(store.path).snapshot()
+    assert len(newer['groups']) == len(mod.GROUPS)
+    assert any(item['id'] == 'iproyal' for item in newer['items'])
+    assert newer['subscriptions'][0]['traffic_unlimited'] == 'no'
+    assert len(LauncherStore(store.path).snapshot()['items']) == len(newer['items'])
 
 
 def test_item_crud_and_delete_never_removes_file(store, tmp_path):
