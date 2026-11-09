@@ -34,26 +34,33 @@
 </aside>
 <div id="top">
  <header class="topbar"><span class="breadcrumb">工作台 <span>/</span> Claude Desktop</span><div class="topbar-actions"><div class="scale-control" role="group" aria-label="界面大小"><button id="scaleDown" aria-label="缩小界面" title="缩小界面">−</button><button id="scaleReset" aria-label="恢复自动适应窗口" title="点击恢复自动适应窗口">自动</button><button id="scaleUp" aria-label="放大界面" title="放大界面">＋</button></div><a href="https://ip.net.coffee/claude/" target="_blank" rel="noreferrer">网页 IP 检测<svg class="icon"><use href="#i-external"/></svg></a></div></header>
+ <div id="examBanner" class="claude-exam-banner" aria-live="polite">
+  <span id="examShield" class="claude-exam-mark" aria-hidden="true">🛡</span>
+  <div class="claude-exam-message"><h3 id="verdict">启动 Claude 前，请先进行环境安全体检</h3><p id="reason">先核对代理、固定 IP 和官方连接；DNS 泄漏需要独立检测。</p></div>
+  <span id="overallLamp" class="status-lamp pending" aria-hidden="true"></span>
+ </div>
  <div class="launch-layout">
   <section class="check-panel" aria-labelledby="checkHeading">
-   <div class="panel-heading"><div><h2 id="checkHeading">启动前检查</h2><p>4 项必检，结果随检测实时更新</p></div><span id="runBadge" class="run-badge">尚未开始</span></div>
+   <div class="panel-heading"><div><h2 id="checkHeading">🛡️ 四关启动体检</h2><p>按真实探针依次更新 · DNS 作为独立参考，不替代启动门禁</p></div><span id="runBadge" class="run-badge">尚未开始</span></div>
    <ol id="steps" class="steps" aria-label="环境检查步骤"></ol>
    <div class="progress-footer"><div><span id="progressText">等待开始检查</span><strong id="progressCount">0 / 4</strong></div><div class="progress-track" role="progressbar" aria-label="检查进度" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0" id="progressBar"><span id="progressFill"></span></div></div>
   </section>
   <aside class="launch-card" aria-labelledby="appTitle">
    <div class="app-identity"><span class="app-icon"><svg class="icon"><use href="#i-spark"/></svg></span><span class="desktop-label">DESKTOP APP</span><h2 id="appTitle">Claude</h2><p id="clientVersion">检查后识别客户端版本</p></div>
    <div class="target"><label for="expected">目标固定出口</label><div class="target-value"><input id="expected" aria-label="目标固定出口 IP" inputmode="decimal" placeholder="读取本机设置…" readonly><button id="editTarget" aria-label="修改目标固定出口">修改</button></div></div>
-   <div class="launch-message" aria-live="polite"><span id="overallLamp" class="status-lamp pending"></span><div><h3 id="verdict">等待环境检查</h3><p id="reason">完成四项检查后，启动按钮将解锁。</p></div></div>
-   <button id="check" class="button button-primary"><svg class="icon"><use href="#i-shield"/></svg><span id="checkLabel">开始环境检查</span><svg class="icon action-arrow"><use href="#i-arrow"/></svg></button>
-   <button id="launch" class="button button-launch" disabled><svg class="icon"><use href="#i-play"/></svg><span id="launchLabel">检查通过后启动</span></button>
+   
+   <div class="claude-action-buttons">
+    <button id="check" class="button button-primary"><svg class="icon"><use href="#i-shield"/></svg><span id="checkLabel">🔍 开始逐项体检</span></button>
+    <button id="launch" class="button button-launch" disabled title="仅在后端四项必检均通过且结果有效时解锁"><svg class="icon"><use href="#i-play"/></svg><span id="launchLabel">🚀 体检通过后启动 Claude</span></button>
+   </div>
    <p id="launchHint" class="launch-hint">不会自动打开客户端，由你决定何时启动。</p>
    <div id="time" class="last-check">尚未检查</div>
   </aside>
  </div>
  <button id="attention" class="attention-strip"><span class="attention-icon"><svg class="icon"><use href="#i-alert"/></svg></span><span><strong id="attentionTitle">还有哪些需要留意？</strong><span id="attentionText">断线阻断尚未部署；完整登录回跳仍需验收。</span></span><svg class="icon"><use href="#i-chevron"/></svg></button>
- <section id="livePanel" class="live-panel"><div class="live-title"><div><svg class="icon"><use href="#i-activity"/></svg><h2>运行中的连接</h2><span class="live-mark">LIVE</span></div><span id="liveStatus" class="live-status">等待观察</span></div><p id="observation">尚未观察到客户端活跃连接。</p><details id="connectionDetails"><summary>查看连接记录 <span id="connectionCount">0 条</span></summary><p id="monitor" class="fine-print"></p><div id="connections" class="connection-list"></div><p class="fine-print">记录仅覆盖已识别的客户端连接；命中代理组不等于已独立测得该连接的出口 IP。</p></details></section>
- <details id="advanced" class="advanced"><summary><span><svg class="icon"><use href="#i-sliders"/></svg><strong>高级诊断与检测依据</strong><small>需要排查时再展开</small></span><svg class="icon disclosure"><use href="#i-chevron"/></svg></summary>
-  <div class="advanced-content">
+
+ <details id="advanced" class="advanced"><summary><span><svg class="icon"><use href="#i-sliders"/></svg><strong>🛠 查看技术排查详情</strong><small>DNS 采样、路由规则、客户端连接记录</small></span><svg class="icon disclosure"><use href="#i-chevron"/></svg></summary>
+  <div class="advanced-content"> <section id="livePanel" class="live-panel"><div class="live-title"><div><svg class="icon"><use href="#i-activity"/></svg><h2>运行中的连接</h2><span class="live-mark">LIVE</span></div><span id="liveStatus" class="live-status">等待观察</span></div><p id="observation">尚未观察到客户端活跃连接。</p><details id="connectionDetails"><summary>查看连接记录 <span id="connectionCount">0 条</span></summary><p id="monitor" class="fine-print"></p><div id="connections" class="connection-list"></div><p class="fine-print">记录仅覆盖已识别的客户端连接；命中代理组不等于已独立测得该连接的出口 IP。</p></details></section><p class="claude-exam-safe-note">提示：绿色表示本次有限范围内的检测通过，不保证账号安全；DNS 样本、IPv6 旁路和断线阻断仍需单独排查。</p>
    <section class="diagnostic-section"><div class="detail-heading"><div><h3>DNS 专项采样</h3><p>独立检查明文 DNS 出网，不等于普通的“解析成功”。</p></div><button id="dnsAuditStart" class="button button-small">执行 40 秒采样</button></div><p id="dnsAuditJob" role="status" class="fine-print"></p><p id="dnsAuditTime" class="fine-print"></p><div id="dnsAudit"></div><p class="fine-print">采样需要 Windows 管理员确认；只保存相关 DNS 元数据，并发送一次随机 .invalid 校准查询。历史结果不用于放行启动。</p></section>
    <section class="diagnostic-section"><h3>系统路径与证书配置</h3><div id="diagnostics"></div><div id="environment"></div><p class="fine-print">环境变量属于检测器进程，不代表已运行的 Claude。地址、账号和口令均不展示。</p></section>
    <section class="diagnostic-section"><h3>客户端规则与保护范围</h3><div id="evidence"></div><p class="fine-print">预检仅验证本次路径和规则。完整登录流程、代理退出后的强制断线阻断尚未验收，不能据此保证账号安全。</p></section>
