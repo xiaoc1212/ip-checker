@@ -179,13 +179,15 @@ function render(s){
   const expired=s.required?.some(row=>row.state==='expired');
   const runtimeBad=s.monitor?.state==='fail'&&Date.now()/1000-s.monitor.checked<40;
   const changed=targetDirty||$('expected').value.trim()!==s.expected;
-  const allow=s.ready&&!locked&&!runtimeBad&&!changed;
+  const dnsAlarm=result.dnsAdvisory==='fail';
+  const allow=s.ready&&!locked&&!runtimeBad&&!changed&&!dnsAlarm;
   $('launch').disabled=!allow;document.querySelector('.launch-card').classList.toggle('ready',allow);
   let title='等待环境检查',reason='完成左侧检查后，启动按钮将解锁。',lamp='pending',hint='不会自动打开客户端，由你决定何时启动。';
   if(sampling){title='DNS 专项采样中';reason='采样结束后，可以继续启动前检查。';lamp='unknown'}
   else if(s.busy){title='正在逐项检查';reason=s.partial?.progress?.label||'正在读取本机环境…';lamp='unknown'}
   else if(actionError){title='操作未完成';reason=actionError;lamp='unknown'}
   else if(changed){title='目标出口已修改';reason='请重新检查新的固定出口。';lamp='unknown'}
+  else if(dnsAlarm){title='DNS 专项检测发现异常，请先排查';reason='明文 DNS 采样提示风险；当前不会解锁启动按钮。';lamp='fail'}
   else if(runtimeBad){title='运行状态需要留意';reason='观察到规则或连接异常，请查看连接记录。';lamp='fail'}
   else if(lastLaunchRun===s.run_id){title='已发送启动请求';reason='客户端实际连接由下方持续观察。';lamp='pass';hint=expired?'上次预检已过期；再次打开前需重检。':'使用中的连接状态见下方。'}
   else if(expired){title='结果已过期，请重检';reason='仅影响再次启动，不表示当前连接已异常。';lamp='unknown'}
