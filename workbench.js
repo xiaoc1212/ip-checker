@@ -239,7 +239,27 @@
       };
       meta.append(remove);card.append(meta);host.append(card);
     }
-    if(!state.subscriptions.length)host.append(el('p','wb-empty','尚未登记订阅。添加所有主用和备用服务后即可统一查看。'));
+    // Show all loaded Clash providers, even if they are inactive or not yet registered.
+    // These are read-only ephemeral cards until the user chooses to register one.
+    const linked=new Set(state.subscriptions.map(sub=>sub.provider_name).filter(Boolean));
+    const unlinked=Object.entries(providerSnapshot?.providers||{}).filter(([name])=>!linked.has(name)&&!['default','global'].includes(name.toLowerCase()));
+    if(unlinked.length){
+      const heading=el('div','wb-sub-title-row');heading.style.gridColumn='1 / -1';
+      heading.append(el('h3','','◈ Clash 中未登记的订阅'));host.append(heading);
+      for(const [name,info] of unlinked){
+        const card=el('article','wb-sub-card wb-sub-unlinked');
+        const title=el('h3','',name),tag=el('span','wb-sub-tag backup','Clash 中已配置 · 使用状态未确认');
+        card.append(title,tag);
+        const GB=n=>Number.isFinite(n)&&n>=0?(n/1073741824).toFixed(2)+' GB':'—';
+        const used=Number.isFinite(info.used_bytes)?info.used_bytes:null,total=Number.isFinite(info.total_bytes)?info.total_bytes:null;
+        card.append(el('div','wb-sub-traffic','已用 '+GB(used)+'　/　总额 '+GB(total)));
+        card.append(el('div','wb-sub-footer',info.expire_date?'到期 '+info.expire_date:'到期日未提供'));
+        const save=el('button','wb-secondary','加入管理');save.onclick=()=>{
+          editSubscription();byId('subName').value=name;byId('subProvider').value=name;byId('subRole').value='backup';
+        };card.append(save);host.append(card);
+      }
+    }
+    if(!state.subscriptions.length&&!unlinked.length)host.append(el('p','wb-empty','尚未登记订阅，且当前未读取到 Clash 的其他提供者。'));
   }
   async function loadProviderUsage(force=false){
     const btn=byId('refreshProviders');
