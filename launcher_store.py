@@ -25,8 +25,11 @@ GROUPS = [
     {'id': 'media', 'name': '影音与社区'},
     {'id': 'ai_reference', 'name': 'AI 信息与工具'},
     {'id': 'vpn_services', 'name': 'VPN 与机场'},
+    {'id': 'static_ip_providers', 'name': '静态住宅 IP 备选'},
+    {'id': 'vpn_backup', 'name': '备用机场收藏夹'},
 ]
 LEGACY_GROUPS = GROUPS[:7]
+PREVIOUS_GROUPS = GROUPS[:12]
 BOOKMARKS = [
     ["runninghub","RunningHub","ai_creative","https://www.runninghub.cn/"],
     ["xiaoyunque","小云雀","ai_creative","https://xyq.jianying.com/"],
@@ -47,6 +50,13 @@ BOOKMARKS = [
     ["mojie","魔戒","vpn_services","https://mojie.co/"],
     ["astrill","Astrill","vpn_services","https://www.astrill.com/"],
     ["letsvpn","LetsVPN","vpn_services","https://letsvpn.world/"],
+    ["iproyal","IPRoyal 静态住宅 IP","static_ip_providers","https://iproyal.com/static-residential-proxies/"],
+    ["proxy-seller","Proxy-Seller 静态 ISP","static_ip_providers","https://proxy-seller.com/isp/"],
+    ["proxy-cheap","Proxy-Cheap 住宅代理","static_ip_providers","https://www.proxy-cheap.com/services/static-residential-proxies"],
+    ["lisahost","LisaHost 丽萨主机","static_ip_providers","https://www.lisahost.com/"],
+    ["backup-vpn-slot-1","备用机场 ①（待添加）","vpn_backup",""],
+    ["backup-vpn-slot-2","备用机场 ②（待添加）","vpn_backup",""],
+    ["backup-vpn-slot-3","备用机场 ③（待添加）","vpn_backup",""],
 ]
 GROUP_IDS = {group['id'] for group in GROUPS}
 LAUNCH_TYPES = {'web', 'exe', 'uwp', 'folder', 'claude_protected'}
@@ -56,7 +66,7 @@ ITEM_FIELDS = {'id', 'name', 'group', 'launch_type', 'icon', 'pinned', 'last_use
 LEGACY_SUB_FIELDS = {'id', 'name', 'purpose', 'expire_date', 'official_url', 'renew_url',
                      'admin_url', 'ip_info', 'notes', 'update_source'}
 SUB_DEFAULTS = {'usage_role': 'unassigned', 'provider_name': '',
-                'traffic_total_gb': '', 'traffic_used_gb': ''}
+                'traffic_total_gb': '', 'traffic_used_gb': '', 'traffic_unlimited': 'no'}
 SUB_FIELDS = LEGACY_SUB_FIELDS | set(SUB_DEFAULTS)
 ID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
 AUMID_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*![A-Za-z0-9._-]+$')
@@ -184,7 +194,7 @@ def validate_item(raw):
 
 
 def validate_subscription(raw):
-    if not isinstance(raw, dict) or set(raw) not in (SUB_FIELDS, LEGACY_SUB_FIELDS):
+    if not isinstance(raw, dict) or not LEGACY_SUB_FIELDS.issubset(raw) or set(raw) - SUB_FIELDS:
         invalid('订阅字段不完整或含有未知字段')
     sub = {**SUB_DEFAULTS, **deepcopy(raw)}
     identifier(sub['id'])
@@ -202,6 +212,8 @@ def validate_subscription(raw):
         web_url(sub[key], key)
     if sub['update_source'] not in ('手动填写', '自动同步'):
         invalid('订阅更新来源无效')
+    if sub['traffic_unlimited'] not in ('yes', 'no'):
+        invalid('不限流量状态无效')
     if sub['usage_role'] not in ('primary', 'backup', 'inactive', 'unassigned'):
         invalid('订阅使用状态无效')
     if len(sub['provider_name']) > 120:
@@ -284,7 +296,7 @@ class LauncherStore:
 
     def _validate(self, data):
         if (not isinstance(data, dict) or set(data) != {'version', 'groups', 'items', 'subscriptions'}
-                or data['version'] != 1 or data['groups'] not in (GROUPS, LEGACY_GROUPS)):
+                or data['version'] != 1 or data['groups'] not in (GROUPS, PREVIOUS_GROUPS, LEGACY_GROUPS)):
             invalid('配置版本或分组无效')
         for key, validate in [('items', validate_item), ('subscriptions', validate_subscription)]:
             rows = data[key]
@@ -298,12 +310,12 @@ class LauncherStore:
         try:
             data = json.loads(self.path.read_text(encoding='utf-8'))
             self._validate(data)
-            if any(set(row) == LEGACY_SUB_FIELDS for row in data['subscriptions']):
+            if any(set(row) != SUB_FIELDS for row in data['subscriptions']):
                 data['subscriptions'] = [validate_subscription(row) for row in data['subscriptions']]
                 changed = True
             else:
                 changed = False
-            if data['groups'] == LEGACY_GROUPS:
+            if data['groups'] in (LEGACY_GROUPS, PREVIOUS_GROUPS):
                 changed = True
                 data['groups'] = deepcopy(GROUPS)
                 known_ids = {item['id'] for item in data['items']}
