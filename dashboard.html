@@ -78,10 +78,27 @@
   <button id="refreshProviders" type="button" class="wb-secondary" title="刷新公网 IP 和 Clash 中全部代理提供者的套餐数据">↻ 刷新网络与套餐</button>
  </section>
  <div id="providerNotice" class="wb-sub-caption">主用、备用由你标记；若 Clash 提供套餐信息，可自动显示剩余流量与日期。</div>
- <div class="wb-sub-body"><div id="subscriptionCards"></div></div>
+ <div class="wb-sub-body">
+ <div class="wb-board-heading"><h3>📊 当前订阅看板</h3><span>主用静态 IP 与主用 VPN · 剩余天数和流量</span></div>
+ <div id="subscriptionCards" class="wb-main-subscriptions"></div>
+ <details id="otherSubscriptions" class="wb-secondary-subs"><summary>📦 查看备用、停用和其他订阅 <span id="otherSubscriptionCount"></span></summary><div id="secondarySubscriptions"></div></details>
+ </div>
+ <section id="backupLibrary" class="wb-backup-library">
+  <div class="wb-board-heading"><h3>🛡️ 静态 IP 与 VPN 备用方案库</h3><span>常用应急入口 · 可自由编辑和删除</span></div>
+  <div class="wb-backup-sections">
+    <section class="wb-backup-category"><header><h4>🏠 静态住宅 IP 购买备选</h4><button id="addStaticIpSite" class="wb-secondary" type="button">＋ 添加</button></header><div id="backupStaticGrid" class="wb-backup-links"></div></section>
+    <section class="wb-backup-category"><header><h4>🚨 静态 IP 出问题时</h4></header><div class="wb-emergency-steps">
+     <div><b>①</b><span>先切换到已验证的 Clash 冷备静态节点，重新执行 Claude 体检。</span></div>
+     <div><b>②</b><span>必要时改用已授权的 Google AI Studio 或官方 API 工作流；仍需遵守各平台地域和账号政策，不能保证没有风控。</span></div>
+    </div><a class="wb-backup-link-action" href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">打开 Google AI Studio ↗</a></section>
+    <section class="wb-backup-category"><header><h4>🌐 备用 VPN / 机场收藏夹</h4><button id="addVpnBackup" class="wb-secondary" type="button">＋ 添加</button></header><div id="backupVpnGrid" class="wb-backup-links"></div></section>
+  </div>
+ </section>
+ <details class="wb-extra-directory"><summary>更多网络服务商参考入口（可折叠）</summary>
  <section class="wb-site-directory" aria-labelledby="vpnDirectoryTitle"><header class="wb-directory-heading"><div><h2 id="vpnDirectoryTitle">大陆网络加速 · 直连入口</h2><p>仅收录本机直连探测通过的入口。检测只确认公开入口响应；登录跳转、付费节点与运营商适配仍需试用确认。</p></div><span class="wb-directory-date">直连入口实测 · 2026-11-06</span></header><div id="vpnDirectory" class="wb-resource-grid"></div></section>
- <section class="wb-site-directory" aria-labelledby="subscriptionToolsTitle"><header class="wb-directory-heading"><div><h2 id="subscriptionToolsTitle">订阅周边网站</h2><p>礼品卡、充值与账户管理入口。</p></div></header><div id="subscriptionTools" class="wb-resource-grid"></div></section>
- <section id="settingsDialog" class="wb-settings-panel" aria-labelledby="settingsTitle"></section></section>
+ </details>
+ <details class="wb-extra-directory"><summary>其他订阅相关网站</summary><section class="wb-site-directory" aria-labelledby="subscriptionToolsTitle"><header class="wb-directory-heading"><div><h2 id="subscriptionToolsTitle">订阅周边网站</h2><p>礼品卡、充值与账户管理入口。</p></div></header><div id="subscriptionTools" class="wb-resource-grid"></div></section>
+ </details><details class="wb-extra-directory wb-settings-wrapper"><summary>⚙️ 设置与备份</summary><section id="settingsDialog" class="wb-settings-panel" aria-labelledby="settingsTitle"></section></details></section>
 </main>
 <dialog id="itemEditor" class="wb-modal" aria-labelledby="itemEditorTitle"><div class="wb-add-tabs" role="tablist" aria-label="添加项目方式"><button id="tabLibrary" role="tab" data-add-tab="library">从本机软件库固定</button><button id="tabImport" role="tab" data-add-tab="import">批量导入快捷方式</button><button id="tabManual" role="tab" data-add-tab="manual">手动添加</button></div>
 <section id="libraryPanel" class="wb-add-panel" role="tabpanel" aria-labelledby="tabLibrary"><header class="wb-modal-header"><h2>本机软件库</h2><button type="button" class="wb-close" data-close="itemEditor" aria-label="关闭软件库">×</button></header><div class="wb-library-toolbar"><input id="appSearch" aria-label="搜索本机软件" placeholder="输入 YY、Steam 或软件名称"><button id="refreshApps" class="wb-secondary">重新扫描</button></div><p id="scanMessage" class="wb-help" role="status"></p><div id="appList" class="wb-app-list"></div></section>
@@ -102,6 +119,7 @@
  <label>Clash 订阅提供者名称<input id="subProvider" list="providerNames" placeholder="可选：匹配 Clash 中的订阅名"><datalist id="providerNames"></datalist></label>
  <label>套餐总流量（GB）<input id="subTotalGB" type="number" min="0" max="999999" step=".001" placeholder="可留空"></label>
  <label>本期已用流量（GB）<input id="subUsedGB" type="number" min="0" max="999999" step=".001" placeholder="可留空"></label>
+ <label class="wb-checkbox"><input id="subUnlimited" type="checkbox">不限流量（无需显示流量条）</label>
  <p class="wb-help wb-form-full">优先显示 Clash 可读取的提供者套餐数据；没有提供者信息时才显示手工流量。未配置不会编造数值。</p>
  <label class="wb-form-full">用途<input id="subPurpose"></label>
  <label class="wb-form-full">官网<input id="subOfficial" type="url" placeholder="https://"></label><label class="wb-form-full">购买 / 续费链接<input id="subRenew" type="url" placeholder="https://"></label><label class="wb-form-full">账户后台<input id="subAdmin" type="url" placeholder="https://"></label><label class="wb-form-full">关联 IP / 端口<input id="subIp"></label><label class="wb-form-full">账户与续费备注<textarea id="subNotes" rows="3"></textarea></label><p id="subFormError" class="wb-form-error wb-form-full" role="alert"></p>
