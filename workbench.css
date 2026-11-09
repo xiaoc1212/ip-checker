@@ -182,3 +182,7 @@ html,body{width:100%;min-width:0}
 /* Provider favicon artwork. A compact initial stays visible when the favicon is unavailable. */
 .wb-resource-mark{position:relative;overflow:hidden}
 .wb-resource-mark img{position:absolute;inset:0;margin:auto;width:24px;height:24px;object-fit:contain;background:var(--bg-window);border-radius:3px}
+
+.wb-network-ribbon #toggleFullscreen{border:1px solid #334155;border-radius:5px;background:#1b2635;color:#cbd5e1;padding:4px 8px;cursor:pointer;font:12px/1.2 var(--mono)}
+.wb-network-ribbon #toggleFullscreen:hover{background:#28384e;color:#fff}
+.wb-sub-unlinked>button{align-self:flex-start;min-height:28px;padding:3px 10px;font-size:12px}
