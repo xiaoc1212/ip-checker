@@ -64,7 +64,14 @@
  <div id="toast" class="toast" role="status" hidden></div>
 </div></div>
 </section>
-<section id="subscriptionDrawer" class="wb-view" role="tabpanel" aria-labelledby="manageSubscriptions" hidden><header class="wb-view-heading"><h2 id="subscriptionDrawerTitle">订阅与网络管理</h2><button id="addSubscription" class="wb-secondary">＋ 添加订阅</button></header><div class="wb-sub-body"><div id="subscriptionCards"></div></div>
+<section id="subscriptionDrawer" class="wb-view" role="tabpanel" aria-labelledby="manageSubscriptions" hidden><header class="wb-view-heading"><h2 id="subscriptionDrawerTitle">订阅与网络管理</h2><button id="addSubscription" class="wb-secondary">＋ 添加订阅</button></header><section class="wb-sub-connection" aria-label="当前网络">
+  <strong id="subLiveIp" title="经本机代理查询的公网出口 IP，并非按服务商确定">出口 IP：待查询</strong>
+  <span id="subLiveClash">Clash：待确认</span>
+  <span id="subLiveTraffic" title="设备所有网卡的收发速率，不是某个套餐的流量消耗">本机流量：待采样</span>
+  <button id="refreshProviders" type="button" class="wb-secondary" title="刷新公网 IP 和 Clash 中全部代理提供者的套餐数据">↻ 刷新网络与套餐</button>
+ </section>
+ <div id="providerNotice" class="wb-sub-caption">主用、备用由你标记；若 Clash 提供套餐信息，可自动显示剩余流量与日期。</div>
+ <div class="wb-sub-body"><div id="subscriptionCards"></div></div>
  <section class="wb-site-directory" aria-labelledby="vpnDirectoryTitle"><header class="wb-directory-heading"><div><h2 id="vpnDirectoryTitle">大陆网络加速 · 直连入口</h2><p>仅收录本机直连探测通过的入口。检测只确认公开入口响应；登录跳转、付费节点与运营商适配仍需试用确认。</p></div><span class="wb-directory-date">直连入口实测 · 2026-11-06</span></header><div id="vpnDirectory" class="wb-resource-grid"></div></section>
  <section class="wb-site-directory" aria-labelledby="subscriptionToolsTitle"><header class="wb-directory-heading"><div><h2 id="subscriptionToolsTitle">订阅周边网站</h2><p>礼品卡、充值与账户管理入口。</p></div></header><div id="subscriptionTools" class="wb-resource-grid"></div></section>
  <section id="settingsDialog" class="wb-settings-panel" aria-labelledby="settingsTitle"></section></section>
@@ -83,7 +90,13 @@
  <label class="wb-form-full">官网 / 下载页<input id="itemOfficial" type="url" placeholder="https://（可选）"></label><p id="itemFormError" class="wb-form-error wb-form-full" role="alert"></p>
  </div><footer class="wb-form-footer"><button type="button" class="wb-secondary" data-close="itemEditor">取消</button><button id="saveItem" class="wb-primary" type="submit">保存项目</button></footer></form></dialog>
 <dialog id="subscriptionEditor" class="wb-modal" aria-labelledby="subEditorTitle"><form id="subscriptionForm"><header class="wb-modal-header"><h2 id="subEditorTitle">编辑订阅</h2><button type="button" class="wb-close" data-close="subscriptionEditor" aria-label="关闭订阅编辑">×</button></header><div class="wb-form-grid">
- <label>订阅名称<input id="subName" required></label><label>到期日期<input id="subExpiry" type="date"><small>留空表示待填写</small></label><label class="wb-form-full">用途<input id="subPurpose"></label>
+ <label>订阅名称<input id="subName" required></label><label>到期日期<input id="subExpiry" type="date"><small>留空表示待填写</small></label>
+ <label>管理标签<select id="subRole"><option value="unassigned">未分类</option><option value="primary">主用（手动标记）</option><option value="backup">备用</option><option value="inactive">停用／未使用</option></select></label>
+ <label>Clash 订阅提供者名称<input id="subProvider" list="providerNames" placeholder="可选：匹配 Clash 中的订阅名"><datalist id="providerNames"></datalist></label>
+ <label>套餐总流量（GB）<input id="subTotalGB" type="number" min="0" max="999999" step=".001" placeholder="可留空"></label>
+ <label>本期已用流量（GB）<input id="subUsedGB" type="number" min="0" max="999999" step=".001" placeholder="可留空"></label>
+ <p class="wb-help wb-form-full">优先显示 Clash 可读取的提供者套餐数据；没有提供者信息时才显示手工流量。未配置不会编造数值。</p>
+ <label class="wb-form-full">用途<input id="subPurpose"></label>
  <label class="wb-form-full">官网<input id="subOfficial" type="url" placeholder="https://"></label><label class="wb-form-full">购买 / 续费链接<input id="subRenew" type="url" placeholder="https://"></label><label class="wb-form-full">账户后台<input id="subAdmin" type="url" placeholder="https://"></label><label class="wb-form-full">关联 IP / 端口<input id="subIp"></label><label class="wb-form-full">账户与续费备注<textarea id="subNotes" rows="3"></textarea></label><p id="subFormError" class="wb-form-error wb-form-full" role="alert"></p>
  </div><footer class="wb-form-footer"><button type="button" class="wb-secondary" data-close="subscriptionEditor">取消</button><button id="saveSubscription" class="wb-primary" type="submit">保存订阅</button></footer></form></dialog>
 <dialog id="missingTarget" class="wb-modal wb-small-modal" aria-labelledby="missingTitle"><header class="wb-modal-header"><h2 id="missingTitle">需要补充启动位置</h2><button class="wb-close" data-close="missingTarget" aria-label="关闭提示">×</button></header><p id="missingMessage" class="wb-dialog-message"></p><div class="wb-missing-actions"><button id="missingLocate" class="wb-primary">手动选择本地 EXE</button><button id="missingEdit" class="wb-secondary">编辑配置</button><button id="missingOfficial" class="wb-secondary">打开官方下载页</button></div><p id="missingError" class="wb-form-error" role="alert"></p></dialog>
