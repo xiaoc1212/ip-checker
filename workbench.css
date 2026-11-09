@@ -142,3 +142,39 @@ dialog::backdrop{background:#06080BB0;backdrop-filter:blur(5px)}.wb-modal{backgr
 #claudeDrawer .progress-footer{padding-top:8px}#claudeDrawer .app-identity{padding:0 0 6px}#claudeDrawer .target,#claudeDrawer .launch-message{margin:8px 0}
 #claudeDrawer .live-panel{margin-top:10px;padding:10px}#claudeDrawer .attention-strip{margin-top:10px}#claudeDrawer .advanced{margin-top:10px}
 @media(max-width:760px){.wb-network-ribbon{gap:7px;font-size:11px}#claudeDrawer .steps{grid-template-columns:1fr}.wb-group-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+
+/* Desktop-first fluid layout: no centered webpage gutters. */
+html,body{width:100%;min-width:0}
+.workbench,.wb-view,.wb-header,.workbench .topbar{max-width:none!important;width:100%!important;margin-left:0!important;margin-right:0!important}
+.workbench{padding:10px clamp(10px,1vw,22px) 22px!important;min-height:100vh}
+.wb-view{max-width:none!important}
+.wb-groups{grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr))}
+.wb-group-grid{grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
+.wb-group-heading .wb-group-glyph{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;border:1px solid #364355;border-radius:6px;background:#192232;font-size:14px}
+.wb-group-heading{gap:8px}
+.wb-app-icon img.wb-web-favicon{width:27px;height:27px;object-fit:contain;border-radius:4px}
+.wb-sub-connection{border:1px solid #354557;background:#121c29;border-radius:9px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px}
+.wb-sub-connection strong{font-size:15px;color:#93c5fd}
+.wb-sub-connection button{margin-left:auto}
+.wb-sub-caption{font-size:12px;color:var(--text-secondary)}
+.wb-sub-title-row{display:flex;align-items:center;gap:8px;margin:12px 0 9px}
+.wb-sub-title-row h3{font-size:15px}
+#subscriptionCards{grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px}
+.wb-sub-card{gap:9px;padding:14px}
+.wb-sub-card h3{font-size:15px}
+.wb-sub-status{font-size:19px}
+.wb-sub-purpose{display:none}
+.wb-sub-badges{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.wb-sub-tag{font-size:11px;color:#d4dce9;background:#232b38;border-radius:5px;padding:3px 6px}
+.wb-sub-tag.primary{background:#133d33;color:#6ee7b7}
+.wb-sub-tag.backup{background:#273650;color:#93c5fd}
+.wb-sub-tag.inactive{background:#302b36;color:#aaa2bb}
+.wb-sub-traffic{font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.wb-sub-traffic-meter{background:#0e1218;height:6px;border-radius:4px;overflow:hidden}
+.wb-sub-traffic-meter>span{display:block;height:100%;background:#60a5fa;max-width:100%}
+.wb-sub-footer{font-size:11px;color:var(--text-help)}
+.wb-sub-links{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:3px 0 0}
+.wb-sub-links button{min-height:30px;padding:4px 6px;font-size:11px}
+.wb-sub-notes{font-size:11px;max-height:56px;overflow:auto;padding:6px}
+@media(min-width:1600px){.wb-groups{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}}
+@media(max-width:720px){.wb-groups{grid-template-columns:1fr}#subscriptionCards{grid-template-columns:1fr}.wb-sub-connection button{margin-left:0}}
