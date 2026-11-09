@@ -194,8 +194,11 @@
     const main=byId('subscriptionCards'),other=byId('secondarySubscriptions');
     main.replaceChildren();other.replaceChildren();
     const subs=state.subscriptions;
-    const ip=subs.find(x=>x.id==='static-ip')||subs.find(x=>x.usage_role==='primary'&&/静态|固定|ip/i.test(x.purpose))||null;
-    const vpn=subs.find(x=>x.id==='vpn')||subs.find(x=>x!==ip&&x.usage_role==='primary')||null;
+    const ip=subs.find(x=>x.id==='static-ip'&&x.usage_role==='primary')||
+      subs.find(x=>x.usage_role==='primary'&&/静态|固定|ip/i.test(x.purpose))||
+      subs.find(x=>x.id==='static-ip')||null;
+    const vpn=subs.find(x=>x!==ip&&x.usage_role==='primary'&&!/静态|固定|ip/i.test(x.purpose))||
+      subs.find(x=>x!==ip&&x.id==='vpn')||null;
     const mainSubs=[ip,vpn];
     const mainIds=new Set(mainSubs.filter(Boolean).map(x=>x.id));
     const primary=ip;
@@ -297,7 +300,13 @@
         open.onclick=()=>valid?openItem(item):editItem(item);
         const edit=el('button','wb-backup-edit','✎');edit.type='button';edit.title='编辑或删除此网址';
         edit.onclick=()=>editItem(item);
-        line.append(logo,content,open,edit);host.append(line);
+        const remove=el('button','wb-backup-edit','×');remove.type='button';remove.title='删除这个备用网站';
+        remove.onclick=async()=>{
+          if(!confirm('从收藏夹移除“'+item.name+'”？只删除快捷链接，不影响购买的服务。'))return;
+          try{await request('launcher/items/delete',{id:item.id});await loadItems();toast('链接已移除');}
+          catch(error){toast(error.message);}
+        };
+        line.append(logo,content,open,edit,remove);host.append(line);
       }
       if(!host.children.length)host.append(el('p','wb-sub-blank','这里还没有收藏，点击上方添加。'));
     };
